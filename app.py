@@ -1,8 +1,8 @@
 import streamlit as st
 from nutrition_engine import (
-    load_food_database,
+    carregar_banco_de_dados_de_alimentos,
     NutritionEngine,
-    PatientInfo,
+    Informações_do_Paciente,
 )
 
 # ===========================================
