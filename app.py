@@ -72,7 +72,7 @@ st.markdown(
 )
 
 # ===========================================
-# CARREGA BANCO DE DADOS (usa load_food_database)
+# CARREGA BANCO DE DADOS
 # ===========================================
 foods_db = load_food_database("taco_sample.csv")
 
@@ -108,6 +108,22 @@ with col_form:
 
     refeicoes = st.number_input("Refeições por dia", 3, 8, 5)
 
+    # 🔹 Padrão alimentar
+    pattern = st.selectbox(
+        "Padrão alimentar",
+        ["Onívoro", "Vegetariano", "Vegano"],
+        index=0,
+    )
+
+    # 🔹 Restrições e condições de saúde
+    with st.expander("⚕️ Restrições e condições de saúde"):
+        is_celiac = st.checkbox("Doença celíaca / sem glúten")
+        is_diabetic = st.checkbox("Diabetes")
+        is_hypertensive = st.checkbox("Hipertensão")
+        lactose_intolerance = st.checkbox("Intolerância à lactose")
+        egg_allergy = st.checkbox("Alergia a ovo")
+        nut_allergy = st.checkbox("Alergia a oleaginosas (castanhas, nozes, amendoim)")
+
     gerar = st.button("Gerar Plano Alimentar", use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -123,7 +139,7 @@ with col_result:
         st.info("Preencha os dados ao lado e clique em **Gerar Plano Alimentar**.")
     else:
         try:
-            # Criar objeto PatientInfo com os campos esperados
+            # Criar objeto PatientInfo com os campos esperados pelo engine
             patient = PatientInfo(
                 name=nome,
                 age=int(idade),
@@ -133,13 +149,13 @@ with col_result:
                 activity_level=atividade,
                 goal=objetivo,
                 meals_per_day=int(refeicoes),
-                pattern="Onívoro",          # padrão default
-                is_celiac=False,
-                is_diabetic=False,
-                is_hypertensive=False,
-                lactose_intolerance=False,
-                egg_allergy=False,
-                nut_allergy=False,
+                pattern=pattern,
+                is_celiac=is_celiac,
+                is_diabetic=is_diabetic,
+                is_hypertensive=is_hypertensive,
+                lactose_intolerance=lactose_intolerance,
+                egg_allergy=egg_allergy,
+                nut_allergy=nut_allergy,
             )
 
             engine = NutritionEngine(foods_db)
@@ -147,7 +163,7 @@ with col_result:
 
             st.success(f"Plano gerado para **{nome}**")
 
-            # Exibir resumo básico
+            # Resumo geral
             st.write(f"**IMC:** {plan['bmi']} – {plan['bmi_category']}")
             st.write(f"**TDEE estimado:** {plan['tdee']} kcal")
             st.write(f"**Meta calórica:** {plan['target_kcal']} kcal")
