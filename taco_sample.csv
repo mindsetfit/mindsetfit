@@ -1,9 +1,96 @@
-name,group,preparation,energy_kcal_per_100g,protein_g_per_100g,carb_g_per_100g,fat_g_per_100g,fiber_g_per_100g,is_vegetarian,is_vegan,is_gluten_free,is_ok_for_diabetes,is_low_sodium,contains_lactose,contains_egg,contains_nuts
-Arroz branco cozido,cereal,cozido,128,2.5,28.0,0.3,1.6,True,True,True,False,True,False,False,False
-Feijão carioca cozido,leguminosa,cozido,76,4.8,13.6,0.5,8.5,True,True,True,True,True,False,False,False
-Peito de frango grelhado,proteina_animal,assado,165,31.0,0.0,3.6,0.0,False,False,True,True,True,False,False,False
-Ovo de galinha cozido,proteina_animal,cozido,146,13.0,0.6,9.5,0.0,True,False,True,True,True,False,True,False
-Maçã in natura,fruta,in_natura,52,0.3,14.0,0.2,2.4,True,True,True,True,True,False,False,False
-Banana prata in natura,fruta,in_natura,98,1.3,26.0,0.2,2.0,True,True,True,False,True,False,False,False
-Alface crespa crua,hortalica,cru,15,1.4,2.9,0.2,2.3,True,True,True,True,True,False,False,False
-Brócolis cozido,hortalica,cozido,25,2.1,4.4,0.4,3.0,True,True,True,True,True,False,False,False
+name,preparation,group,energy_kcal_per_100g,is_vegetarian,is_vegan,is_gluten_free,is_ok_for_diabetes,is_low_sodium,contains_lactose,contains_egg,contains_nuts
+Arroz branco cozido,cozido,cereal,128,True,True,True,True,True,False,False,False
+Arroz integral cozido,cozido,cereal,124,True,True,True,True,True,False,False,False
+Batata inglesa cozida,cozido,tuberculo,52,True,True,True,True,True,False,False,False
+Batata doce cozida,cozido,tuberculo,77,True,True,True,True,True,False,False,False
+Mandioca cozida,cozido,tuberculo,125,True,True,True,True,True,False,False,False
+Mandioquinha cozida,cozido,tuberculo,101,True,True,True,True,True,False,False,False
+Inhame cozido,cozido,tuberculo,78,True,True,True,True,True,False,False,False
+Cará cozido,cozido,tuberculo,85,True,True,True,True,True,False,False,False
+Farinha de aveia,cru,cereal,394,True,True,False,True,True,False,False,False
+Aveia em flocos,cru,cereal,394,True,True,False,True,True,False,False,False
+Pão francês,assado,cereal,300,True,True,False,False,False,False,False,False
+Pão integral,assado,cereal,252,True,True,False,False,False,False,False,False
+Tapioca,preparado,cereal,330,True,True,True,True,True,False,False,False
+Quinoa cozida,cozido,cereal,120,True,True,True,True,True,False,False,False
+Cevadinha cozida,cozido,cereal,123,True,True,False,True,True,False,False,False
+Massa cozida,cozido,cereal,157,True,True,False,False,False,False,False,False
+Polenta cozida,cozido,cereal,59,True,True,True,True,True,False,False,False
+Milho cozido,cozido,leguminosa,106,True,True,True,True,True,False,False,False
+Granola sem açúcar,cru,cereal,421,True,True,False,False,True,False,False,False
+Cuscuz de milho,preparado,cereal,112,True,True,True,True,True,False,False,False
+Banana prata,cru,fruta,98,True,True,True,False,True,False,False,False
+Banana nanica,cru,fruta,92,True,True,True,False,True,False,False,False
+Maçã,cru,fruta,52,True,True,True,True,True,False,False,False
+Pera,cru,fruta,57,True,True,True,True,True,False,False,False
+Laranja,cru,fruta,46,True,True,True,True,True,False,False,False
+Tangerina,cru,fruta,38,True,True,True,True,True,False,False,False
+Abacaxi,cru,fruta,48,True,True,True,True,True,False,False,False
+Melão,cru,fruta,30,True,True,True,True,True,False,False,False
+Melancia,cru,fruta,24,True,True,True,True,True,False,False,False
+Uva,cru,fruta,53,True,True,True,False,True,False,False,False
+Mamão papaia,cru,fruta,45,True,True,True,True,True,False,False,False
+Manga,cru,fruta,72,True,True,True,False,True,False,False,False
+Goiaba,cru,fruta,68,True,True,True,True,True,False,False,False
+Kiwi,cru,fruta,51,True,True,True,True,True,False,False,False
+Morango,cru,fruta,30,True,True,True,True,True,False,False,False
+Mirtilo,cru,fruta,57,True,True,True,True,True,False,False,False
+Amora,cru,fruta,43,True,True,True,True,True,False,False,False
+Pêssego,cru,fruta,39,True,True,True,True,True,False,False,False
+Acerola,cru,fruta,33,True,True,True,True,True,False,False,False
+Jabuticaba,cru,fruta,58,True,True,True,True,True,False,False,False
+Alface,cru,hortalica,15,True,True,True,True,True,False,False,False
+Rúcula,cru,hortalica,13,True,True,True,True,True,False,False,False
+Agrião,cru,hortalica,17,True,True,True,True,True,False,False,False
+Espinafre,cru,hortalica,23,True,True,True,True,True,False,False,False
+Couve,cru,hortalica,27,True,True,True,True,True,False,False,False
+Acelga,cru,hortalica,19,True,True,True,True,True,False,False,False
+Repolho,cru,hortalica,17,True,True,True,True,True,False,False,False
+Repolho roxo,cru,hortalica,31,True,True,True,True,True,False,False,False
+Chicória,cru,hortalica,22,True,True,True,True,True,False,False,False
+Escarola,cru,hortalica,16,True,True,True,True,True,False,False,False
+Jiló,cozido,legume,27,True,True,True,True,True,False,False,False
+Berinjela,cozido,legume,19,True,True,True,True,True,False,False,False
+Abobrinha,cozido,legume,19,True,True,True,True,True,False,False,False
+Chuchu,cozido,legume,17,True,True,True,True,True,False,False,False
+Pepino,cru,legume,10,True,True,True,True,True,False,False,False
+Tomate,cru,legume,19,True,True,True,True,True,False,False,False
+Pimentão,cru,legume,23,True,True,True,True,True,False,False,False
+Cebola,cru,legume,39,True,True,True,True,True,False,False,False
+Alho-poró,cru,legume,61,True,True,True,True,True,False,False,False
+Cebolinha,cru,hortalica,29,True,True,True,True,True,False,False,False
+Cenoura cozida,cozido,legume,30,True,True,True,True,True,False,False,False
+Beterraba cozida,cozido,legume,49,True,True,True,True,True,False,False,False
+Abóbora cabotiá cozida,cozido,legume,48,True,True,True,True,True,False,False,False
+Abóbora moranga cozida,cozido,legume,29,True,True,True,True,True,False,False,False
+Ervilha fresca cozida,cozido,legume,81,True,True,True,True,True,False,False,False
+Vagem cozida,cozido,legume,28,True,True,True,True,True,False,False,False
+Milho verde cozido,cozido,legume,106,True,True,True,True,True,False,False,False
+Quiabo cozido,cozido,legume,30,True,True,True,True,True,False,False,False
+Nabo cozido,cozido,legume,18,True,True,True,True,True,False,False,False
+Rabanete cru,cru,legume,14,True,True,True,True,True,False,False,False
+Palmito em conserva,preparado,legume,28,True,True,True,True,False,False,False,False
+Champignon em conserva,preparado,legume,22,True,True,True,True,False,False,False,False
+Cogumelo paris,cozido,legume,22,True,True,True,True,True,False,False,False
+Shimeji,cozido,legume,34,True,True,True,True,True,False,False,False
+Shiitake,cozido,legume,35,True,True,True,True,True,False,False,False
+Frango peito cozido,cozido,proteina_animal,165,False,False,True,True,True,False,False,False
+Patinho moído cozido,cozido,proteina_animal,219,False,False,True,True,True,False,False,False
+Ovo cozido,cozido,proteina_animal,155,False,False,True,True,True,False,True,False
+Tilápia grelhada,grelhado,proteina_animal,96,False,False,True,True,True,False,False,False
+Sardinha grelhada,grelhado,proteina_animal,208,False,False,True,True,True,False,False,False
+Atum em água,preparado,proteina_animal,116,False,False,True,True,True,False,False,False
+Carne moída 2a cozida,cozido,proteina_animal,241,False,False,True,True,True,False,False,False
+Coxa de frango s/ pele,cozido,proteina_animal,184,False,False,True,True,True,False,False,False
+Filé mignon grelhado,grelhado,proteina_animal,143,False,False,True,True,True,False,False,False
+Salmão grelhado,grelhado,proteina_animal,208,False,False,True,True,True,False,False,False
+Feijão carioca cozido,cozido,leguminosa,76,True,True,True,True,True,False,False,False
+Feijão preto cozido,cozido,leguminosa,77,True,True,True,True,True,False,False,False
+Lentilha cozida,cozido,leguminosa,93,True,True,True,True,True,False,False,False
+Grão-de-bico cozido,cozido,leguminosa,164,True,True,True,True,True,False,False,False
+Ervilha seca cozida,cozido,leguminosa,67,True,True,True,True,True,False,False,False
+Soja cozida,cozido,leguminosa,172,True,True,True,True,True,False,False,False
+Tofu,preparado,proteina_vegetal,76,True,True,True,True,True,False,False,False
+Tempeh,preparado,proteina_vegetal,192,True,True,True,True,True,False,False,False
+Amendoim,cru,proteina_vegetal,567,True,True,True,False,True,False,False,True
+Semente de girassol,cru,proteina_vegetal,582,True,True,True,False,True,False,False,True
