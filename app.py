@@ -1,115 +1,244 @@
 import streamlit as st
-from nutrition_engine import UserInput, load_food_database, build_meal_plan
 
-st.set_page_config(page_title="Nutricionista Virtual IA", layout="wide")
+from nutrition_engine import (
+    load_food_database,
+    NutritionEngine,
+    PatientInfo,
+)
 
-st.title("Nutricionista Virtual IA")
-st.write("Sistema educativo de planejamento alimentar individualizado. Não substitui consulta com nutricionista.")
 
-with st.sidebar:
-    st.header("Dados do Paciente")
+# ----------------- ESTILO GLOBAL (DARK PREMIUM) ----------------- #
 
-    name = st.text_input("Nome", "Paciente Teste")
-    age = st.number_input("Idade", min_value=10, max_value=100, value=30)
-    sex = st.selectbox("Sexo", options=[("Masculino", "male"), ("Feminino", "female")], format_func=lambda x: x[0])[1]
 
-    weight_kg = st.number_input("Peso (kg)", min_value=30.0, max_value=250.0, value=80.0, step=0.5)
-    height_cm = st.number_input("Altura (cm)", min_value=130.0, max_value=220.0, value=178.0, step=0.5)
+def inject_css():
+    st.markdown(
+        """
+        <style>
+        /* Fundo geral */
+        .stApp {
+            background-color: #050915;
+            color: #f4f4f4;
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        }
 
-    activity_map = {
-        "Sedentário": "sedentary",
-        "Levemente ativo": "light",
-        "Moderadamente ativo": "moderate",
-        "Muito ativo": "high",
-    }
-    activity_label = st.selectbox("Nível de atividade", list(activity_map.keys()))
-    activity_level = activity_map[activity_label]
+        /* Sidebar */
+        section[data-testid="stSidebar"] {
+            background-color: #0c111e !important;
+            border-right: 1px solid #141b2f;
+        }
 
-    goal_map = {
-        "Emagrecimento": "fat_loss",
-        "Ganho de massa muscular": "muscle_gain",
-    }
-    goal_label = st.selectbox("Objetivo", list(goal_map.keys()))
-    goal = goal_map[goal_label]
+        /* Títulos principais */
+        .main-title {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #f5f7ff;
+        }
 
-    meals_per_day = st.number_input("Refeições por dia", min_value=3, max_value=8, value=5)
+        .main-subtitle {
+            font-size: 0.98rem;
+            color: #d0d6f5;
+            margin-top: 0.3rem;
+        }
 
-    diet_pattern_map = {
-        "Onívoro": "omnivore",
-        "Vegetariano": "vegetarian",
-        "Vegano": "vegan",
-    }
-    diet_label = st.selectbox("Padrão alimentar", list(diet_pattern_map.keys()))
-    dietary_pattern = diet_pattern_map[diet_label]
+        /* Cards */
+        .card {
+            background: #0c111e;
+            border-radius: 18px;
+            padding: 18px 20px;
+            border: 1px solid #141b2f;
+            box-shadow: 0 18px 45px rgba(0,0,0,0.55);
+            margin-bottom: 18px;
+        }
 
-    restrictions_options = {
-        "Celíaco (sem glúten)": "celiac",
-        "Diabetes": "diabetes",
-        "Hipertensão": "hypertension",
-        "Intolerância à lactose": "lactose_intolerance",
-        "Alergia a ovo": "egg_allergy",
-        "Alergia a castanhas/nozes": "nut_allergy",
-    }
-    selected_restrictions_labels = st.multiselect("Restrições e condições", list(restrictions_options.keys()))
-    restrictions = [restrictions_options[l] for l in selected_restrictions_labels]
+        .card-header {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #e6ebff;
+            margin-bottom: 4px;
+        }
 
-    dislikes_text = st.text_input("Alimentos que não gosta (separe por vírgula)", "")
-    dislikes = [x.strip() for x in dislikes_text.split(",") if x.strip()]
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #9ff8c8;
+            background: rgba(62, 207, 142, 0.12);
+            border: 1px solid rgba(62, 207, 142, 0.4);
+        }
 
-    generate = st.button("Gerar plano alimentar")
+        .kcal-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: #0b1624;
+            border: 1px solid #1f2b45;
+            font-size: 0.72rem;
+            color: #f7f9ff;
+        }
 
-foods = load_food_database("taco_sample.csv")
+        .kcal-pill span {
+            color: #3ecf8e;
+            font-weight: 700;
+        }
 
-if generate:
-    user = UserInput(
-        name=name,
-        age=int(age),
-        sex=sex,
-        weight_kg=float(weight_kg),
-        height_cm=float(height_cm),
-        activity_level=activity_level,
-        goal=goal,
-        meals_per_day=int(meals_per_day),
-        dietary_pattern=dietary_pattern,
-        restrictions=restrictions,
-        dislikes=dislikes,
+        .food-line {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            padding: 4px 0;
+            border-bottom: 1px dashed #1a2238;
+        }
+
+        .food-line:last-child {
+            border-bottom: none;
+        }
+
+        .food-main {
+            color: #f4f4ff;
+        }
+
+        .food-meta {
+            color: #a1aacb;
+            font-size: 0.8rem;
+        }
+
+        .subs-label {
+            font-size: 0.78rem;
+            color: #8f97be;
+            margin-top: 4px;
+        }
+
+        .subs-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 2px 4px 0 0;
+            border-radius: 999px;
+            background: #050915;
+            border: 1px solid #222b4a;
+            font-size: 0.72rem;
+            color: #d3dbff;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #f0f4ff;
+            margin-bottom: 6px;
+        }
+
+        .small-muted {
+            font-size: 0.78rem;
+            color: #9aa3c8;
+        }
+
+        .hydro-pill {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #071523;
+            border: 1px solid #153554;
+            font-size: 0.8rem;
+            color: #e2f5ff;
+            margin-right: 6px;
+        }
+
+        .hydro-pill span {
+            color: #48d6ff;
+            font-weight: 700;
+        }
+
+        .sleep-tip {
+            font-size: 0.86rem;
+            color: #d8defc;
+            padding-left: 0.6rem;
+        }
+
+        .sleep-tip::before {
+            content: "• ";
+            color: #3ecf8e;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    plan = build_meal_plan(user, foods)
 
-    st.subheader("Resumo do Paciente")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("IMC", plan["user"]["bmi"], help=plan["user"]["bmi_classification"])
-    with col2:
-        st.metric("Kcal diárias estimadas", plan["user"]["total_kcal"])
-    with col3:
-        macros = plan["user"]["macros"]
-        st.write(f"Proteínas: **{macros['protein_g']} g**")
-        st.write(f"Carboidratos: **{macros['carb_g']} g**")
-        st.write(f"Gorduras: **{macros['fat_g']} g**")
+# ----------------- APP ----------------- #
 
-    st.subheader("Hidratação")
-    st.write(f"Meta diária de água: **{plan['hydration']['target_ml']} ml**")
-    for g in plan["hydration"]["guidance"]:
-        st.write(f"- {g}")
 
-    st.subheader(plan["education"]["title"])
-    for p in plan["education"]["points"]:
-        st.write(f"- {p}")
+def sidebar_inputs():
+    st.sidebar.title("Dados do Paciente")
 
-    st.subheader(plan["sleep_hygiene"]["title"])
-    for p in plan["sleep_hygiene"]["guidance"]:
-        st.write(f"- {p}")
+    name = st.sidebar.text_input("Nome", value="Paciente Teste")
 
-    st.subheader("Plano de Refeições")
-    for meal in plan["meals"]:
-        st.markdown(f"### {meal['name']} (alvo ~ {meal['target_kcal']} kcal)")
-        for item in meal["items"]:
-            st.write(
-                f"- {item['name']} ({item['preparation']}): **{item['grams']} g** (~{item['kcal']} kcal)"
-            )
+    age = st.sidebar.number_input("Idade", 16, 90, value=30, step=1)
 
-    st.info("Este plano é educativo e não substitui o acompanhamento individualizado com nutricionista.")
-else:
-    st.info("Preencha os dados na barra lateral e clique em **Gerar plano alimentar**.")
+    sex = st.sidebar.selectbox("Sexo", ["masculino", "feminino"])
+
+    weight = st.sidebar.number_input("Peso (kg)", 30.0, 250.0, value=80.0, step=0.5)
+
+    height = st.sidebar.number_input("Altura (cm)", 130.0, 220.0, value=178.0, step=1.0)
+
+    activity = st.sidebar.selectbox(
+        "Nível de atividade",
+        ["Sedentário", "Leve", "Moderado", "Intenso"],
+        index=0,
+    )
+
+    goal = st.sidebar.selectbox(
+        "Objetivo",
+        ["Emagrecimento", "Ganho de massa muscular", "Manutenção"],
+    )
+
+    meals = st.sidebar.slider("Refeições por dia", 3, 6, value=4)
+
+    pattern = st.sidebar.selectbox(
+        "Padrão alimentar",
+        ["Onívoro", "Vegetariano", "Vegano"],
+    )
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Restrições e condições")
+
+    is_celiac = st.sidebar.checkbox("Doença celíaca (sem glúten)")
+    is_diabetic = st.sidebar.checkbox("Diabetes (controle de carboidratos)")
+    is_hypertensive = st.sidebar.checkbox("Hipertensão (baixo sódio)")
+    lactose_intolerance = st.sidebar.checkbox("Intolerância à lactose")
+    egg_allergy = st.sidebar.checkbox("Alergia a ovo")
+    nut_allergy = st.sidebar.checkbox("Alergia a oleaginosas (castanhas, amendoim)")
+
+    st.sidebar.markdown("---")
+    generate = st.sidebar.button("✨ Gerar plano alimentar")
+
+    patient = PatientInfo(
+        name=name,
+        age=age,
+        sex=sex,
+        weight_kg=weight,
+        height_cm=height,
+        activity_level=activity,
+        goal=goal,
+        meals_per_day=meals,
+        pattern=pattern,
+        is_celiac=is_celiac,
+        is_diabetic=is_diabetic,
+        is_hypertensive=is_hypertensive,
+        lactose_intolerance=lactose_intolerance,
+        egg_allergy=egg_allergy,
+        nut_allergy=nut_allergy,
+    )
+
+    return patient, generate
+
+
+def render_header():
+    st.markdown(
+        """
+        <div style="m
