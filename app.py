@@ -1,4 +1,11 @@
 import streamlit as st
+from PIL import Image
+
+# ------ BANNER PREMIUM ------
+banner = Image.open("mindsetfit_banner.png")
+st.image(banner, use_column_width=True)
+# ----------------------------
+import streamlit as st
 
 from nutrition_engine import (
     load_food_database,
