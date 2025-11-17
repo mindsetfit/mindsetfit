@@ -241,4 +241,219 @@ def sidebar_inputs():
 def render_header():
     st.markdown(
         """
-        <div style="m
+        <div style="margin-bottom: 12px;">
+            <div class="badge">MindsetFit • Nutricionista Virtual IA</div>
+            <div class="main-title" style="margin-top: 10px;">
+                Planejamento Alimentar Inteligente
+            </div>
+            <div class="main-subtitle">
+                Sistema educativo de planejamento alimentar individualizado. 
+                <strong>Não substitui consulta presencial com nutricionista.</strong>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_overview(summary: dict, patient: PatientInfo):
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">IMC</div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="kcal-pill">
+                <span>{summary['bmi']}</span> kg/m²
+            </div>
+            <div class="small-muted" style="margin-top:6px;">
+                Classificação: <strong>{summary['bmi_category']}</strong>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Gasto energético</div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="kcal-pill">
+                <span>{summary['tdee']}</span> kcal/dia (estimado)
+            </div>
+            <div class="small-muted" style="margin-top:6px;">
+                Baseado em Mifflin-St Jeor + nível de atividade.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col3:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Meta calórica</div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="kcal-pill">
+                <span>{summary['target_kcal']}</span> kcal/dia
+            </div>
+            <div class="small-muted" style="margin-top:6px;">
+                Ajustada para objetivo de <strong>{patient.goal}</strong>.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def render_meal_plan(summary: dict):
+    st.markdown("### Plano alimentar diário")
+
+    for meal in summary["meals"]:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="card-header">{meal["name"]}</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+            <div class="kcal-pill" style="margin-bottom:8px;">
+                alvo: <span>{meal['kcal_target']} kcal</span> 
+                · real: {meal['kcal_real']} kcal
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        for item in meal["items"]:
+            st.markdown(
+                f"""
+                <div class="food-line">
+                    <div class="food-main">
+                        {item['name']}
+                        <div class="food-meta">
+                            {item['grams']} g · {item['kcal_total']} kcal
+                        </div>
+                    </div>
+                    <div class="food-meta">
+                        {item['group']}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if item["substitutions"]:
+                subs_html = "".join(
+                    f'<span class="subs-badge">{s}</span>'
+                    for s in item["substitutions"]
+                )
+                st.markdown(
+                    f"""
+                    <div class="subs-label">
+                        Trocas possíveis (similar em kcal e grupo):<br/>
+                        {subs_html}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_hydration_and_sleep(engine: NutritionEngine, patient: PatientInfo):
+    col1, col2 = st.columns([1.1, 1])
+
+    hydro = engine.calculate_hydration(patient)
+    sleep = engine.sleep_hygiene_tips(patient.age)
+
+    with col1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">Hidratação diária recomendada 💧</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+            <div class="hydro-pill">
+                <span>{hydro['total_ml']} ml</span> por dia
+            </div>
+            <div class="hydro-pill">
+                ~ <span>{hydro['liters']} L</span> / dia
+            </div>
+            <div class="hydro-pill">
+                ~ <span>{hydro['cups_200']}</span> copos de 200 ml
+            </div>
+            <div class="small-muted" style="margin-top:6px;">
+                Cálculo: {hydro['ml_per_kg']} ml/kg · 
+                Ajustado conforme nível de atividade.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">Higiene do sono 😴</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+            <div class="small-muted" style="margin-bottom:6px;">
+                Para sua faixa etária, a recomendação geral é de 
+                <strong>{sleep['recommended']}</strong>.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        for tip in sleep["tips"]:
+            st.markdown(f'<div class="sleep-tip">{tip}</div>', unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def main():
+    st.set_page_config(
+        page_title="MindsetFit | Nutricionista IA",
+        page_icon="🥗",
+        layout="wide",
+    )
+
+    inject_css()
+
+    patient, generate = sidebar_inputs()
+    render_header()
+
+    # Carregar base e engine
+    try:
+        food_df = load_food_database("taco_sample.csv")
+    except Exception as e:
+        st.error(
+            "Erro ao carregar a base de alimentos (taco_sample.csv). "
+            "Verifique se o arquivo existe no repositório."
+        )
+        st.exception(e)
+        return
+
+    engine = NutritionEngine(food_df)
+
+    if not generate:
+        st.info(
+            "Preencha os dados na barra lateral e clique em **“Gerar plano alimentar”** "
+            "para visualizar o planejamento.",
+        )
+        return
+
+    summary = engine.generate_meal_plan(patient)
+
+    render_overview(summary, patient)
+    render_meal_plan(summary)
+    render_hydration_and_sleep(engine, patient)
+
+
+if __name__ == "__main__":
+    main()
