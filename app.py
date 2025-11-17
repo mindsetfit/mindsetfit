@@ -221,10 +221,11 @@ with col_result:
 
     if not gerar:
         st.markdown(
-            '<p class="hint-text">Preencha os dados ao lado e clique no botão para visualizar o plano nutricional, divisão por refeições, receitas e orientações de estilo de vida.</p>',
+            '<p class="hint-text">Preencha os dados ao lado e clique no botão para visualizar o plano nutricional, a Taxa Metabólica Basal, divisão por refeições, receitas e orientações de estilo de vida.</p>',
             unsafe_allow_html=True,
         )
     else:
+        # ---------------- PACIENTE ----------------
         paciente = Informações_do_Paciente(
             nome=nome,
             idade=int(idade),
@@ -239,7 +240,26 @@ with col_result:
         resultado = engine.gerar_plano(paciente, equacao_principal)
         macros = resultado["macros"]
 
-        # -------- MÉTRICAS PRINCIPAIS --------
+        # ======================================
+        # BLOCO: TMB DESTACADA
+        # ======================================
+        st.markdown("### 🔥 Taxa Metabólica Basal (TMB)")
+        st.markdown(
+            f"""
+Sua TMB estimada pela equação **{equacao_label}** é:
+
+> ### 🧩 **{resultado["tmb_principal"]} kcal/dia**
+
+A **Taxa Metabólica Basal (TMB)** representa a quantidade de energia que o corpo precisa em repouso absoluto para manter
+funções vitais como respiração, circulação, temperatura corporal e atividade cerebral.
+"""
+        )
+
+        st.write("")
+
+        # ======================================
+        # MÉTRICAS PRINCIPAIS (TMB/TDEE/KCAL OBJ)
+        # ======================================
         m1, m2, m3 = st.columns(3)
         with m1:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
@@ -249,7 +269,7 @@ with col_result:
 
         with m2:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">TDEE</div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-label">TDEE (gasto total)</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-value">{resultado["tdee"]} kcal</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -257,12 +277,14 @@ with col_result:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
             st.markdown('<div class="metric-label">KCAL OBJETIVO</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-value">{resultado["kcal_objetivo"]} kcal</div>', unsafe_allow_html=True)
-            st.markmarkdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
         st.write("")
 
-        # -------- TMB NAS 4 EQUAÇÕES --------
-        st.markdown("#### Comparativo das Equações de TMB")
+        # ======================================
+        # COMPARATIVO DAS EQUAÇÕES DE TMB
+        # ======================================
+        st.markdown("#### Comparativo da TMB nas principais equações")
         df_tmb = pd.DataFrame(
             [
                 {"Equação": k, "TMB (kcal/dia)": v}
@@ -273,7 +295,9 @@ with col_result:
 
         st.write("")
 
-        # -------- MACROS DIÁRIOS --------
+        # ======================================
+        # MACROS DIÁRIOS
+        # ======================================
         st.markdown("#### Distribuição de Macronutrientes (dia inteiro)")
         df_macros = pd.DataFrame(
             [
@@ -298,7 +322,9 @@ with col_result:
 
         st.write("")
 
-        # -------- PLANO POR REFEIÇÃO --------
+        # ======================================
+        # PLANO POR REFEIÇÃO
+        # ======================================
         st.markdown("#### Plano Diário por Refeição (kcal e macros)")
         df_refeicoes = pd.DataFrame(resultado["refeicoes"])
         df_refeicoes_display = df_refeicoes.copy()
@@ -348,7 +374,9 @@ with col_result:
 
         st.write("")
 
-        # -------- CONTEXTO DO PACIENTE --------
+        # ======================================
+        # CONTEXTO DO PACIENTE
+        # ======================================
         st.markdown("#### Contexto do Paciente")
         tags = [
             f"Idade: {paciente.idade} anos",
@@ -362,7 +390,9 @@ with col_result:
         tags_html = "".join([f'<span class="tag">{t}</span>' for t in tags])
         st.markdown(tags_html, unsafe_allow_html=True)
 
-        # -------- HIDRATAÇÃO --------
+        # ======================================
+        # HIDRATAÇÃO
+        # ======================================
         st.write("")
         st.markdown("#### 💧 Orientação de Hidratação")
         agua_min = peso * 30   # ml/kg
@@ -375,7 +405,9 @@ with col_result:
 """
         )
 
-        # -------- HIGIENE DO SONO --------
+        # ======================================
+        # HIGIENE DO SONO
+        # ======================================
         st.write("")
         st.markdown("#### 😴 Higiene do Sono")
         st.markdown(
