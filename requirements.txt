@@ -1,2 +1,5 @@
 streamlit
 pandas
+pyarrow
+numpy
+altair
