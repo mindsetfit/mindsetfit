@@ -241,7 +241,7 @@ with col_result:
         macros = resultado["macros"]
 
         # ======================================
-        # BLOCO: TMB DESTACADA
+        # BLOCO: TMB DESTACADA (TEXTO)
         # ======================================
         st.markdown("### 🔥 Taxa Metabólica Basal (TMB)")
         st.markdown(
@@ -254,6 +254,20 @@ A **Taxa Metabólica Basal (TMB)** representa a quantidade de energia que o corp
 funções vitais como respiração, circulação, temperatura corporal e atividade cerebral.
 """
         )
+
+        # ======================================
+        # TABELA – TMB DA EQUAÇÃO ESCOLHIDA
+        # ======================================
+        st.markdown("#### TMB da equação selecionada")
+        df_tmb_principal = pd.DataFrame(
+            [
+                {
+                    "Equação selecionada": equacao_label,
+                    "TMB (kcal/dia)": resultado["tmb_principal"],
+                }
+            ]
+        )
+        st.dataframe(df_tmb_principal, use_container_width=True, hide_index=True)
 
         st.write("")
 
