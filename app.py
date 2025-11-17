@@ -1,8 +1,8 @@
 import streamlit as st
 from nutrition_engine import (
-    carregar_banco_de_dados_de_alimentos,
+    load_food_database,
     NutritionEngine,
-    Informações_do_Paciente,
+    PatientInfo,
 )
 
 # ===========================================
@@ -16,7 +16,8 @@ st.set_page_config(
 # ===========================================
 # CSS PREMIUM (Dark, Minimalista, Clean)
 # ===========================================
-st.markdown("""
+st.markdown(
+    """
 <style>
 
 body {
@@ -24,8 +25,10 @@ body {
     color: #ffffff;
 }
 
-/* Caixas */
-.block-container { padding-top: 2rem; }
+/* Container principal */
+.block-container { 
+    padding-top: 2rem; 
+}
 
 /* Títulos */
 h1, h2, h3, h4 {
@@ -55,23 +58,23 @@ h1, h2, h3, h4 {
     border: 1px solid #ffffff50;
 }
 
-/* Inputs */
-.stSelectbox, .stTextInput, .stNumberInput {
-    color: white !important;
-}
-
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ===========================================
 # TÍTULO PREMIUM
 # ===========================================
-st.markdown("<h1 style='text-align:center; margin-bottom:40px;'>🧠 MINDSETFIT – Nutricionista IA Premium</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<h1 style='text-align:center; margin-bottom:40px;'>🧠 MINDSETFIT – Nutricionista IA Premium</h1>",
+    unsafe_allow_html=True,
+)
 
 # ===========================================
-# CARREGA BANCO DE DADOS
+# CARREGA BANCO DE DADOS (usa load_food_database)
 # ===========================================
-foods_db = carregar_banco_de_dados_de_alimentos()
+foods_db = load_food_database("taco_sample.csv")
 
 # ===========================================
 # LAYOUT: FORM ESQUERDA / RESULTADO DIREITA
@@ -85,13 +88,24 @@ with col_form:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
     st.markdown("### 📋 Dados do Paciente")
-    nome = st.text_input("Nome")
+
+    nome = st.text_input("Nome", value="Paciente Teste")
     idade = st.number_input("Idade", 15, 100, 30)
     sexo = st.selectbox("Sexo", ["masculino", "feminino"])
+
     peso = st.number_input("Peso (kg)", 30.0, 250.0, 80.0)
     altura = st.number_input("Altura (cm)", 120, 230, 178)
-    atividade = st.selectbox("Nível de atividade", ["Sedentário", "Leve", "Moderado", "Alto", "Atleta"])
-    objetivo = st.selectbox("Objetivo", ["Emagrecimento", "Hipertrofia", "Saúde", "Performance"])
+
+    atividade = st.selectbox(
+        "Nível de atividade",
+        ["Sedentário", "Leve", "Moderado", "Intenso"],
+    )
+
+    objetivo = st.selectbox(
+        "Objetivo",
+        ["Emagrecimento", "Ganho de massa muscular", "Manutenção"],
+    )
+
     refeicoes = st.number_input("Refeições por dia", 3, 8, 5)
 
     gerar = st.button("Gerar Plano Alimentar", use_container_width=True)
@@ -109,23 +123,54 @@ with col_result:
         st.info("Preencha os dados ao lado e clique em **Gerar Plano Alimentar**.")
     else:
         try:
-            # Criar objeto com informações
-            dados = Informações_do_Paciente(
-                nome=nome,
-                idade=idade,
-                sexo=sexo,
-                peso=peso,
-                altura=altura,
-                atividade=atividade,
-                objetivo=objetivo,
-                refeicoes=refeicoes,
+            # Criar objeto PatientInfo com os campos esperados
+            patient = PatientInfo(
+                name=nome,
+                age=int(idade),
+                sex=sexo,
+                weight_kg=float(peso),
+                height_cm=float(altura),
+                activity_level=atividade,
+                goal=objetivo,
+                meals_per_day=int(refeicoes),
+                pattern="Onívoro",          # padrão default
+                is_celiac=False,
+                is_diabetic=False,
+                is_hypertensive=False,
+                lactose_intolerance=False,
+                egg_allergy=False,
+                nut_allergy=False,
             )
 
             engine = NutritionEngine(foods_db)
-            plano = engine.gerar_plano(dados)
+            plan = engine.generate_meal_plan(patient)
 
             st.success(f"Plano gerado para **{nome}**")
-            st.write(plano)
+
+            # Exibir resumo básico
+            st.write(f"**IMC:** {plan['bmi']} – {plan['bmi_category']}")
+            st.write(f"**TDEE estimado:** {plan['tdee']} kcal")
+            st.write(f"**Meta calórica:** {plan['target_kcal']} kcal")
+
+            st.markdown("---")
+            st.markdown("#### 🍽️ Refeições do dia")
+
+            for meal in plan["meals"]:
+                st.markdown(f"**{meal['name']}**")
+                st.write(
+                    f"Alvo: {meal['kcal_target']} kcal | "
+                    f"Planejado: {meal['kcal_real']} kcal"
+                )
+
+                for item in meal["items"]:
+                    subs_text = ", ".join(item["substitutions"]) if item["substitutions"] else "—"
+                    st.markdown(
+                        f"- {item['name']} — **{item['grams']} g** "
+                        f"(_~{item['kcal_total']} kcal_)  \n"
+                        f"  Substituições: {subs_text}"
+                    )
+
+                st.markdown("---")
 
         except Exception as e:
             st.error("❌ Ocorreu um erro ao gerar o plano.")
