@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ======================================
-# CARREGAMENTO DO BANCO DE DADOS
+# CARREGAMENTO DO BANCO DE DADOS (TACO)
 # ======================================
 @st.cache_data
 def carregar_engine():
@@ -141,7 +141,9 @@ st.write("")
 # ======================================
 col_form, col_result = st.columns([1.05, 1.25])
 
-# -------- FORMULÁRIO --------
+# ======================================
+# COLUNA ESQUERDA – FORMULÁRIO
+# ======================================
 with col_form:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">📋 Dados do Paciente</div>', unsafe_allow_html=True)
@@ -210,7 +212,9 @@ with col_form:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# -------- RESULTADOS --------
+# ======================================
+# COLUNA DIREITA – RESULTADOS
+# ======================================
 with col_result:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">🍽️ Plano Alimentar Individualizado</div>', unsafe_allow_html=True)
@@ -235,7 +239,7 @@ with col_result:
         resultado = engine.gerar_plano(paciente, equacao_principal)
         macros = resultado["macros"]
 
-        # ---- MÉTRICAS PRINCIPAIS ----
+        # -------- MÉTRICAS PRINCIPAIS --------
         m1, m2, m3 = st.columns(3)
         with m1:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
@@ -253,11 +257,11 @@ with col_result:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
             st.markdown('<div class="metric-label">KCAL OBJETIVO</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-value">{resultado["kcal_objetivo"]} kcal</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markmarkdown('</div>', unsafe_allow_html=True)
 
         st.write("")
 
-        # ---- TMB nas 4 EQUAÇÕES ----
+        # -------- TMB NAS 4 EQUAÇÕES --------
         st.markdown("#### Comparativo das Equações de TMB")
         df_tmb = pd.DataFrame(
             [
@@ -269,7 +273,7 @@ with col_result:
 
         st.write("")
 
-        # ---- MACROS DIÁRIOS ----
+        # -------- MACROS DIÁRIOS --------
         st.markdown("#### Distribuição de Macronutrientes (dia inteiro)")
         df_macros = pd.DataFrame(
             [
@@ -294,7 +298,7 @@ with col_result:
 
         st.write("")
 
-        # ---- PLANO POR REFEIÇÃO + RECEITAS ----
+        # -------- PLANO POR REFEIÇÃO --------
         st.markdown("#### Plano Diário por Refeição (kcal e macros)")
         df_refeicoes = pd.DataFrame(resultado["refeicoes"])
         df_refeicoes_display = df_refeicoes.copy()
@@ -327,17 +331,24 @@ with col_result:
 
             with st.expander(f"{nome_ref} – ~{kcal_ref} kcal"):
                 st.markdown(
-                    f"**Meta de macros para esta refeição:**  
-                    • Proteínas: ~{prot_ref} g  
-                    • Carboidratos: ~{carb_ref} g  
-                    • Gorduras: ~{gord_ref} g",
+                    f"""
+**Meta de macros para esta refeição:**  
+• Proteínas: ~{prot_ref} g  
+• Carboidratos: ~{carb_ref} g  
+• Gorduras: ~{gord_ref} g
+""",
                 )
                 st.write("")
-                st.markdown(receitas.get(nome_ref, "Ajuste manualmente esta refeição conforme necessidade."))
+                st.markdown(
+                    receitas.get(
+                        nome_ref,
+                        "Ajuste manualmente esta refeição conforme necessidade."
+                    )
+                )
 
         st.write("")
 
-        # ---- CONTEXTO DO PACIENTE ----
+        # -------- CONTEXTO DO PACIENTE --------
         st.markdown("#### Contexto do Paciente")
         tags = [
             f"Idade: {paciente.idade} anos",
@@ -351,31 +362,31 @@ with col_result:
         tags_html = "".join([f'<span class="tag">{t}</span>' for t in tags])
         st.markdown(tags_html, unsafe_allow_html=True)
 
-        # ---- HIDRATAÇÃO ----
+        # -------- HIDRATAÇÃO --------
         st.write("")
         st.markdown("#### 💧 Orientação de Hidratação")
         agua_min = peso * 30   # ml/kg
         agua_max = peso * 45   # ml/kg
         st.markdown(
             f"""
-            • Recomendação geral: **{agua_min/1000:.1f} a {agua_max/1000:.1f} L de água por dia**  
-            • Distribuir ao longo do dia, evitando grandes volumes de uma vez.  
-            • Aumentar ingestão em dias de treino intenso, muito calor ou sudorese excessiva.
-            """
+• Recomendação geral: **{agua_min/1000:.1f} a {agua_max/1000:.1f} L de água por dia**  
+• Distribuir ao longo do dia, evitando grandes volumes de uma vez.  
+• Aumentar ingestão em dias de treino intenso, muito calor ou sudorese excessiva.
+"""
         )
 
-        # ---- HIGIENE DO SONO ----
+        # -------- HIGIENE DO SONO --------
         st.write("")
         st.markdown("#### 😴 Higiene do Sono")
         st.markdown(
             """
-            • Priorizar **7–9 horas** de sono por noite.  
-            • Manter horário regular para dormir e acordar, inclusive aos finais de semana.  
-            • Evitar telas (celular, TV, computador) **30–60 minutos** antes de deitar.  
-            • Evitar refeições muito volumosas e cafeína nas 3–4 horas que antecedem o sono.  
-            • Ambiente do quarto: escuro, silencioso e com temperatura agradável.  
-            • Se houver dificuldade crônica de sono, considerar avaliação médica especializada.
-            """
+• Priorizar **7–9 horas** de sono por noite.  
+• Manter horário regular para dormir e acordar, inclusive aos finais de semana.  
+• Evitar telas (celular, TV, computador) **30–60 minutos** antes de deitar.  
+• Evitar refeições muito volumosas e cafeína nas 3–4 horas que antecedem o sono.  
+• Ambiente do quarto: escuro, silencioso e com temperatura agradável.  
+• Se houver dificuldade crônica de sono, considerar avaliação médica especializada.
+"""
         )
 
     st.markdown('</div>', unsafe_allow_html=True)
