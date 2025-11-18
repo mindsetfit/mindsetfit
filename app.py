@@ -213,6 +213,62 @@ with col_form:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ======================================
+# FUNÇÃO AUXILIAR – RECOMENDAR EQUAÇÃO (MODELO B)
+# ======================================
+def recomendar_equacao_modelo_b(paciente: Informações_do_Paciente):
+    """
+    Modelo B:
+    - Cunningham: para atletas / treino regular + % gordura disponível e mais baixa
+    - Mifflin: padrão ouro para maioria (consultório geral)
+    - Harris-Benedict: pacientes sedentários / destreinados
+    - Owen: obesidade / sobrepeso importante
+    """
+    nivel = paciente.nivel_atividade.lower()
+    objetivo = paciente.objetivo.lower()
+    bf = paciente.gordura_corporal
+    peso = paciente.peso
+    altura_m = paciente.altura / 100
+    imc = peso / (altura_m ** 2)
+
+    # Regra 1 – Atleta / bem condicionado com %BF disponível e razoável
+    if bf is not None and bf <= 22 and (
+        "moderadamente" in nivel or "muito" in nivel or "extremamente" in nivel
+    ):
+        return "Cunningham", (
+            "Você possui nível de atividade moderado/alto e percentual de gordura dentro de faixa mais atlética. "
+            "A equação de Cunningham é interessante para quem acompanha composição corporal e massa magra."
+        )
+
+    # Regra 2 – Obesidade / sobrepeso importante
+    if imc >= 30:
+        return "Owen", (
+            "Seu IMC está na faixa de sobrepeso importante/obesidade. "
+            "A equação de Owen costuma ser utilizada em pacientes com maior peso corporal."
+        )
+
+    # Regra 3 – Sedentário / destreinado
+    if "sedent" in nivel:
+        return "Harris-Benedict", (
+            "Seu nível de atividade é sedentário. "
+            "A equação de Harris-Benedict é clássica e muito utilizada em população geral menos ativa."
+        )
+
+    # Regra 4 – Hipertrofia com treino e BF controlado → Cunningham
+    if ("ganho" in objetivo or "massa" in objetivo) and bf is not None and bf < 25 and (
+        "levemente" in nivel or "moderadamente" in nivel or "muito" in nivel
+    ):
+        return "Cunningham", (
+            "Seu foco é ganho de massa muscular, com algum nível de atividade física e percentual de gordura controlado. "
+            "A equação de Cunningham, baseada em massa magra, tende a representar melhor a necessidade calórica."
+        )
+
+    # Regra 5 – Default consultório → Mifflin
+    return "Mifflin-St Jeor", (
+        "Para a maioria dos pacientes em consultório, a equação de Mifflin-St Jeor apresenta boa precisão "
+        "e é considerada um padrão ouro na prática clínica."
+    )
+
+# ======================================
 # COLUNA DIREITA – RESULTADOS
 # ======================================
 with col_result:
@@ -221,7 +277,7 @@ with col_result:
 
     if not gerar:
         st.markdown(
-            '<p class="hint-text">Preencha os dados ao lado e clique no botão para visualizar o plano nutricional, a Taxa Metabólica Basal, divisão por refeições, receitas e orientações de estilo de vida.</p>',
+            '<p class="hint-text">Preencha os dados ao lado e clique no botão para visualizar o plano nutricional, a Taxa Metabólica Basal, orientação da melhor equação, divisão por refeições, receitas e orientações de estilo de vida.</p>',
             unsafe_allow_html=True,
         )
     else:
@@ -272,6 +328,74 @@ funções vitais como respiração, circulação, temperatura corporal e ativida
         st.write("")
 
         # ======================================
+        # TABS: EQUAÇÕES x ORIENTAÇÃO
+        # ======================================
+        tab_equacoes, tab_orientacao = st.tabs(
+            ["Equações de TMB", "Orientação sobre a melhor fórmula"]
+        )
+
+        # ---------- TAB 1: EQUAÇÕES DE TMB ----------
+        with tab_equacoes:
+            st.markdown("#### Comparativo da TMB nas principais equações")
+            df_tmb = pd.DataFrame(
+                [
+                    {"Equação": k, "TMB (kcal/dia)": v}
+                    for k, v in resultado["tmb_equacoes"].items()
+                ]
+            )
+            st.dataframe(df_tmb, use_container_width=True, hide_index=True)
+
+        # ---------- TAB 2: ORIENTAÇÃO / MODELO B ----------
+        with tab_orientacao:
+            st.markdown("#### Qual equação faz mais sentido para o seu momento?")
+
+            recomendada_label, justificativa = recomendar_equacao_modelo_b(paciente)
+
+            st.markdown(
+                f"""
+**Com base nos seus dados atuais (peso, altura, nível de atividade, objetivo e composição corporal), 
+a equação que mais faz sentido utilizar é:**
+
+> ### ✅ **{recomendada_label}**
+"""
+            )
+
+            st.markdown(justificativa)
+
+            # Feedback se a escolha do paciente bate com a recomendada
+            if recomendada_label == equacao_label:
+                st.success(
+                    f"Você selecionou **{equacao_label}**, que está alinhada com a recomendação para o seu perfil."
+                )
+            else:
+                st.warning(
+                    f"Você selecionou **{equacao_label}**, mas para o seu perfil a recomendação automática seria **{recomendada_label}**. "
+                    "Converse com seu nutricionista para decidir qual abordagem seguir."
+                )
+
+            # Explicação geral de cada equação – Modelo B
+            st.write("")
+            st.markdown("#### Visão geral das equações:")
+
+            st.markdown(
+                """
+- **Mifflin-St Jeor**  
+  Geralmente considerada mais precisa para a maioria dos pacientes em consultório. Boa opção padrão.
+
+- **Harris-Benedict**  
+  Equação clássica, bastante utilizada em população geral, especialmente em pacientes mais sedentários ou destreinados.
+
+- **Owen**  
+  Muito usada em pacientes com sobrepeso importante/obesidade, pois foi derivada em populações com maior peso corporal.
+
+- **Cunningham**  
+  Baseada em **massa magra**. Indicada para atletas, praticantes de musculação, pacientes com avaliação de composição corporal mais refinada.
+"""
+            )
+
+        st.write("")
+
+        # ======================================
         # MÉTRICAS PRINCIPAIS (TMB/TDEE/KCAL OBJ)
         # ======================================
         m1, m2, m3 = st.columns(3)
@@ -292,20 +416,6 @@ funções vitais como respiração, circulação, temperatura corporal e ativida
             st.markdown('<div class="metric-label">KCAL OBJETIVO</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-value">{resultado["kcal_objetivo"]} kcal</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
-
-        st.write("")
-
-        # ======================================
-        # COMPARATIVO DAS EQUAÇÕES DE TMB
-        # ======================================
-        st.markdown("#### Comparativo da TMB nas principais equações")
-        df_tmb = pd.DataFrame(
-            [
-                {"Equação": k, "TMB (kcal/dia)": v}
-                for k, v in resultado["tmb_equacoes"].items()
-            ]
-        )
-        st.dataframe(df_tmb, use_container_width=True, hide_index=True)
 
         st.write("")
 
