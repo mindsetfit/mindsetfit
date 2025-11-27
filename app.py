@@ -1,575 +1,109 @@
 import streamlit as st
 import pandas as pd
+from utils.loader import load_taco_database
 from nutrition_engine import (
-    carregar_banco_de_dados_de_alimentos,
-    NutritionEngine,
-    Informações_do_Paciente,
+    tmb_mifflin, tmb_harris, tmb_katch, sugerir_refeicoes
 )
 
-# ======================================
-# CONFIGURAÇÃO DE PÁGINA – DARK PREMIUM
-# ======================================
 st.set_page_config(
-    page_title="MindsetFit – Nutrição IA",
-    layout="wide",
+    page_title="MindsetFit — Sistema Nutricional",
+    layout="wide"
 )
 
-# ======================================
-# CARREGAMENTO DO BANCO DE DADOS (TACO)
-# ======================================
-@st.cache_data
-def carregar_engine():
-    try:
-        df_alimentos = carregar_banco_de_dados_de_alimentos("taco_sample.csv")
-        engine = NutritionEngine(df_alimentos)
-        return engine, df_alimentos, None
-    except Exception as e:
-        return None, None, str(e)
+# ======= CARREGAR CSS =======
+with open("styles/theme.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-
-engine, df_alimentos, erro_db = carregar_engine()
-
-if erro_db:
-    st.error(f"Erro ao carregar banco de alimentos (TACO): {erro_db}")
+# ======= CARREGAR TACO =======
+try:
+    taco = load_taco_database("database/taco.csv")
+except Exception as e:
+    st.error(f"❌ Erro ao carregar TACO: {e}")
     st.stop()
 
-# ======================================
-# CSS PREMIUM
-# ======================================
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: #0f1116;
-        color: #ffffff;
-    }
+# =========================
+#          ABAS
+# =========================
 
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-        max-width: 1200px;
-    }
+aba1, aba2 = st.tabs(["📋 Dados do Paciente", "📊 Resultado Final"])
 
-    .main-title {
-        font-size: 2.4rem;
-        font-weight: 800;
-        color: #ffffff;
-    }
+# =========================
+#          ABA 1
+# =========================
 
-    .sub-title {
-        font-size: 1.0rem;
-        color: #b0b3c1;
-    }
+with aba1:
 
-    .card {
-        background: #151821;
-        border-radius: 18px;
-        padding: 1.5rem 1.8rem;
-        border: 1px solid #262a36;
-        box-shadow: 0 14px 35px rgba(0,0,0,0.45);
-    }
+    st.title("Anamnese Nutricional — MindsetFit")
 
-    .section-title {
-        font-size: 1.2rem;
-        font-weight: 700;
-        margin-bottom: 0.8rem;
-        color: #ffffff;
-    }
+    with st.container():
+        st.subheader("Dados gerais")
 
-    .hint-text {
-        font-size: 0.9rem;
-        color: #9ca0b3;
-    }
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            sexo = st.selectbox("Sexo", ["Masculino", "Feminino"])
+        with col2:
+            idade = st.number_input("Idade", 10, 100, 25)
+        with col3:
+            altura = st.number_input("Altura (cm)", 120, 230, 175)
 
-    .metric-box {
-        background: #11131b;
-        border-radius: 14px;
-        padding: 0.8rem 1rem;
-        border: 1px solid #232738;
-        text-align: center;
-    }
+        col4, col5 = st.columns(2)
+        with col4:
+            peso = st.number_input("Peso (kg)", 30, 250, 80)
+        with col5:
+            bf = st.number_input("Gordura corporal (%)", 5, 50, 15)
 
-    .metric-label {
-        font-size: 0.8rem;
-        color: #a1a7c2;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-    }
+    st.markdown("---")
+    st.subheader("Equação de TMB")
 
-    .metric-value {
-        font-size: 1.3rem;
-        font-weight: 700;
-        color: #ffffff;
-    }
+    eq = st.selectbox("Escolha o método", [
+        "Mifflin-St Jeor",
+        "Harris-Benedict",
+        "Katch-McArdle"
+    ])
 
-    .tag {
-        display: inline-block;
-        padding: 0.12rem 0.55rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        border: 1px solid #2b3042;
-        color: #c3c7dd;
-        margin-right: 0.3rem;
-        margin-bottom: 0.2rem;
-        background: #141722;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ======================================
-# CABEÇALHO
-# ======================================
-st.markdown(
-    """
-    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.3rem;">
-        <span style="font-size:2.1rem;">🧠</span>
-        <div>
-            <div class="main-title">MINDSETFIT – Nutricionista IA Premium</div>
-            <div class="sub-title">Planejamento alimentar individualizado com base na Tabela TACO.</div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.write("")
-
-# ======================================
-# LAYOUT PRINCIPAL
-# ======================================
-col_form, col_result = st.columns([1.05, 1.25])
-
-# ======================================
-# COLUNA ESQUERDA – FORMULÁRIO
-# ======================================
-with col_form:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">📋 Dados do Paciente</div>', unsafe_allow_html=True)
-
-    nome = st.text_input("Nome", value="Paciente Teste")
-    idade = st.number_input("Idade", min_value=10, max_value=100, value=30, step=1)
-    sexo = st.selectbox("Sexo", options=["masculino", "feminino"], index=0)
-    peso = st.number_input("Peso (kg)", min_value=30.0, max_value=250.0, value=80.0, step=0.5, format="%.2f")
-    altura = st.number_input("Altura (cm)", min_value=120.0, max_value=220.0, value=178.0, step=1.0, format="%.0f")
-
-    nivel_atividade = st.selectbox(
-        "Nível de atividade",
-        options=[
-            "Sedentário",
-            "Levemente ativo",
-            "Moderadamente ativo",
-            "Muito ativo",
-            "Extremamente ativo",
-        ],
-        index=0,
-    )
-
-    objetivo = st.selectbox(
-        "Objetivo principal",
-        options=[
-            "Emagrecimento",
-            "Manutenção",
-            "Ganho de massa",
-        ],
-        index=0,
-    )
-
-    equacao_label = st.selectbox(
-        "Equação de TMB principal",
-        options=[
-            "Mifflin-St Jeor",
-            "Harris-Benedict",
-            "Owen",
-            "Cunningham",
-        ],
-        index=0,
-        help="Todas serão calculadas, mas esta será usada como base principal para o plano.",
-    )
-    mapa_equacao = {
-        "Mifflin-St Jeor": "mifflin",
-        "Harris-Benedict": "harris-benedict",
-        "Owen": "owen",
-        "Cunningham": "cunningham",
-    }
-    equacao_principal = mapa_equacao[equacao_label]
-
-    # ---------- BF REALMENTE OPCIONAL ----------
-    usa_bf = st.checkbox(
-        "Informei meu percentual de gordura com avaliação confiável (bioimpedância, adipômetro, etc.)?",
-        value=True,
-    )
-
-    gordura_corporal_input = st.number_input(
-        "Percentual de gordura corporal (%)",
-        min_value=5.0,
-        max_value=60.0,
-        value=20.0,
-        step=0.5,
-        help="Se você não tiver esse dado confiável, desmarque a opção acima.",
-    )
-
-    if usa_bf:
-        gordura_corporal = float(gordura_corporal_input)
+    if eq == "Mifflin-St Jeor":
+        tmb = tmb_mifflin(sexo, peso, altura, idade)
+    elif eq == "Harris-Benedict":
+        tmb = tmb_harris(sexo, peso, altura, idade)
     else:
-        gordura_corporal = None
+        tmb = tmb_katch(peso, bf)
 
-    st.markdown(
-        '<p class="hint-text">Preencha os dados acima e clique em <b>Gerar Plano Alimentar</b>. As calorias e macronutrientes são calculados a partir das principais equações de TMB e da Tabela TACO.</p>',
-        unsafe_allow_html=True,
-    )
+    st.success(f"TMB calculada: **{tmb:.0f} kcal**")
 
-    gerar = st.button("🚀 Gerar Plano Alimentar", use_container_width=True)
+    st.session_state["tmb"] = tmb
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.info("➡ Vá para a aba RESULTADO FINAL para gerar o plano.")
 
-# ======================================
-# FUNÇÃO AUXILIAR – RECOMENDAR EQUAÇÃO (MODELO B)
-# ======================================
-def recomendar_equacao_modelo_b(paciente: Informações_do_Paciente):
-    """
-    Modelo B:
-    - Cunningham: para atletas / treino regular + % gordura disponível e mais baixa
-    - Mifflin: padrão ouro para maioria (consultório geral)
-    - Harris-Benedict: pacientes sedentários / destreinados
-    - Owen: obesidade / sobrepeso importante
-    """
-    nivel = paciente.nivel_atividade.lower()
-    objetivo = paciente.objetivo.lower()
-    bf = paciente.gordura_corporal
-    peso = paciente.peso
-    altura_m = paciente.altura / 100
-    imc = peso / (altura_m ** 2)
+# =========================
+#          ABA 2
+# =========================
 
-    # Regra 1 – Atleta / bem condicionado com %BF disponível e razoável
-    if bf is not None and bf <= 22 and (
-        "moderadamente" in nivel or "muito" in nivel or "extremamente" in nivel
-    ):
-        return "Cunningham", (
-            "Você possui nível de atividade moderado/alto e percentual de gordura dentro de faixa mais atlética. "
-            "A equação de Cunningham é interessante para quem acompanha composição corporal e massa magra."
-        )
+with aba2:
+    st.title("📊 Resultado Final")
 
-    # Regra 2 – Obesidade / sobrepeso importante
-    if imc >= 30:
-        return "Owen", (
-            "Seu IMC está na faixa de sobrepeso importante/obesidade. "
-            "A equação de Owen costuma ser utilizada em pacientes com maior peso corporal."
-        )
+    if "tmb" not in st.session_state:
+        st.warning("⚠ Volte à primeira aba e preencha os dados.")
+        st.stop()
 
-    # Regra 3 – Sedentário / destreinado
-    if "sedent" in nivel:
-        return "Harris-Benedict", (
-            "Seu nível de atividade é sedentário. "
-            "A equação de Harris-Benedict é clássica e muito utilizada em população geral menos ativa."
-        )
+    tmb = st.session_state["tmb"]
 
-    # Regra 4 – Hipertrofia com treino e BF controlado → Cunningham
-    if ("ganho" in objetivo or "massa" in objetivo) and bf is not None and bf < 25 and (
-        "levemente" in nivel or "moderadamente" in nivel or "muito" in nivel
-    ):
-        return "Cunningham", (
-            "Seu foco é ganho de massa muscular, com algum nível de atividade física e percentual de gordura controlado. "
-            "A equação de Cunningham, baseada em massa magra, tende a representar melhor a necessidade calórica."
-        )
+    st.subheader("Meta calórica")
+    objetivo = st.selectbox("Objetivo", ["Emagrecimento", "Manutenção", "Ganho"])
 
-    # Regra 5 – Default consultório → Mifflin
-    return "Mifflin-St Jeor", (
-        "Para a maioria dos pacientes em consultório, a equação de Mifflin-St Jeor apresenta boa precisão "
-        "e é considerada um padrão ouro na prática clínica."
-    )
-
-# ======================================
-# COLUNA DIREITA – RESULTADOS
-# ======================================
-with col_result:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">🍽️ Plano Alimentar Individualizado</div>', unsafe_allow_html=True)
-
-    if not gerar:
-        st.markdown(
-            '<p class="hint-text">Preencha os dados ao lado e clique no botão para visualizar o plano nutricional, a Taxa Metabólica Basal, orientação da melhor equação, divisão por refeições, receitas e orientações de estilo de vida.</p>',
-            unsafe_allow_html=True,
-        )
+    if objetivo == "Emagrecimento":
+        kcal_final = tmb - 350
+    elif objetivo == "Ganho":
+        kcal_final = tmb + 300
     else:
-        # ---------------- PACIENTE ----------------
-        paciente = Informações_do_Paciente(
-            nome=nome,
-            idade=int(idade),
-            sexo=sexo,
-            peso=float(peso),
-            altura=float(altura),
-            nivel_atividade=nivel_atividade,
-            objetivo=objetivo,
-            gordura_corporal=gordura_corporal,
-        )
+        kcal_final = tmb
 
-        # Blindagem de erro na geração do plano
-        try:
-            resultado = engine.gerar_plano(paciente, equacao_principal)
-        except Exception as e:
-            st.error(f"Erro ao gerar plano nutricional: {e}")
-            st.markdown(
-                '<p class="hint-text">Verifique se o módulo <b>nutrition_engine.py</b> está atualizado e se a função <code>gerar_plano</code> retorna todas as chaves esperadas.</p>',
-                unsafe_allow_html=True,
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.stop()
+    st.success(f"Meta diária: **{kcal_final:.0f} kcal**")
 
-        macros = resultado["macros"]
+    st.markdown("---")
+    st.subheader("Sugestão automática de refeições (TACO)")
 
-        # ======================================
-        # BLOCO: TMB DESTACADA (TEXTO)
-        # ======================================
-        tmb_principal = round(resultado["tmb_principal"])
-        st.markdown("### 🔥 Taxa Metabólica Basal (TMB)")
-        st.markdown(
-            f"""
-Sua TMB estimada pela equação **{equacao_label}** é:
+    refeicoes = sugerir_refeicoes(taco, kcal_final)
+    st.dataframe(refeicoes)
 
-> ### 🧩 **{tmb_principal} kcal/dia**
-
-A **Taxa Metabólica Basal (TMB)** representa a quantidade de energia que o corpo precisa em repouso absoluto para manter
-funções vitais como respiração, circulação, temperatura corporal e atividade cerebral.
-"""
-        )
-
-        # ======================================
-        # TABELA – TMB DA EQUAÇÃO ESCOLHIDA
-        # ======================================
-        st.markdown("#### TMB da equação selecionada")
-        df_tmb_principal = pd.DataFrame(
-            [
-                {
-                    "Equação selecionada": equacao_label,
-                    "TMB (kcal/dia)": tmb_principal,
-                }
-            ]
-        )
-        st.dataframe(df_tmb_principal, use_container_width=True, hide_index=True)
-
-        st.write("")
-
-        # ======================================
-        # TABS: EQUAÇÕES x ORIENTAÇÃO
-        # ======================================
-        tab_equacoes, tab_orientacao = st.tabs(
-            ["Equações de TMB", "Orientação sobre a melhor fórmula"]
-        )
-
-        # ---------- TAB 1: EQUAÇÕES DE TMB ----------
-        with tab_equacoes:
-            st.markdown("#### Comparativo da TMB nas principais equações")
-            df_tmb = pd.DataFrame(
-                [
-                    {"Equação": k, "TMB (kcal/dia)": round(v)}
-                    for k, v in resultado["tmb_equacoes"].items()
-                ]
-            )
-            st.dataframe(df_tmb, use_container_width=True, hide_index=True)
-
-        # ---------- TAB 2: ORIENTAÇÃO / MODELO B ----------
-        with tab_orientacao:
-            st.markdown("#### Qual equação faz mais sentido para o seu momento?")
-
-            recomendada_label, justificativa = recomendar_equacao_modelo_b(paciente)
-
-            st.markdown(
-                f"""
-**Com base nos seus dados atuais (peso, altura, nível de atividade, objetivo e composição corporal), 
-a equação que mais faz sentido utilizar é:**
-
-> ### ✅ **{recomendada_label}**
-"""
-            )
-
-            st.markdown(justificativa)
-
-            # Feedback se a escolha do paciente bate com a recomendada
-            if recomendada_label == equacao_label:
-                st.success(
-                    f"Você selecionou **{equacao_label}**, que está alinhada com a recomendação para o seu perfil."
-                )
-            else:
-                st.warning(
-                    f"Você selecionou **{equacao_label}**, mas para o seu perfil a recomendação automática seria **{recomendada_label}**. "
-                    "Converse com seu nutricionista para decidir qual abordagem seguir."
-                )
-
-            # Explicação geral de cada equação – Modelo B
-            st.write("")
-            st.markdown("#### Visão geral das equações:")
-
-            st.markdown(
-                """
-- **Mifflin-St Jeor**  
-  Geralmente considerada mais precisa para a maioria dos pacientes em consultório. Boa opção padrão.
-
-- **Harris-Benedict**  
-  Equação clássica, bastante utilizada em população geral, especialmente em pacientes mais sedentários ou destreinados.
-
-- **Owen**  
-  Muito usada em pacientes com sobrepeso importante/obesidade, pois foi derivada em populações com maior peso corporal.
-
-- **Cunningham**  
-  Baseada em **massa magra**. Indicada para atletas, praticantes de musculação, pacientes com avaliação de composição corporal mais refinada.
-"""
-            )
-
-        st.write("")
-
-        # ======================================
-        # MÉTRICAS PRINCIPAIS (TMB/TDEE/KCAL OBJ)
-        # ======================================
-        tdee = round(resultado["tdee"])
-        kcal_obj = round(resultado["kcal_objetivo"])
-
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">TMB (equação principal)</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{tmb_principal} kcal</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with m2:
-            st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">TDEE (gasto total)</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{tdee} kcal</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with m3:
-            st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-label">KCAL OBJETIVO</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{kcal_obj} kcal</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.write("")
-
-        # ======================================
-        # MACROS DIÁRIOS
-        # ======================================
-        st.markdown("#### Distribuição de Macronutrientes (dia inteiro)")
-        df_macros = pd.DataFrame(
-            [
-                {
-                    "Macronutriente": "Proteínas",
-                    "Quantidade (g)": macros["proteina_g"],
-                    "% Kcal aprox.": 30,
-                },
-                {
-                    "Macronutriente": "Carboidratos",
-                    "Quantidade (g)": macros["carbo_g"],
-                    "% Kcal aprox.": 45,
-                },
-                {
-                    "Macronutriente": "Gorduras",
-                    "Quantidade (g)": macros["gordura_g"],
-                    "% Kcal aprox.": 25,
-                },
-            ]
-        )
-        st.dataframe(df_macros, use_container_width=True, hide_index=True)
-
-        st.write("")
-
-        # ======================================
-        # PLANO POR REFEIÇÃO
-        # ======================================
-        st.markdown("#### Plano Diário por Refeição (kcal e macros)")
-        df_refeicoes = pd.DataFrame(resultado["refeicoes"])
-        df_refeicoes_display = df_refeicoes.copy()
-        df_refeicoes_display["% do dia"] = (df_refeicoes_display["fracao"] * 100).round(0)
-        df_refeicoes_display = df_refeicoes_display[
-            ["refeicao", "% do dia", "kcal", "proteina_g", "carbo_g", "gordura_g"]
-        ].rename(
-            columns={
-                "refeicao": "Refeição",
-                "kcal": "Kcal",
-                "proteina_g": "Proteína (g)",
-                "carbo_g": "Carbo (g)",
-                "gordura_g": "Gordura (g)",
-            }
-        )
-
-        st.dataframe(df_refeicoes_display, use_container_width=True, hide_index=True)
-
-        receitas = resultado["receitas"]
-
-        st.write("")
-        st.markdown("#### Receitas Sugeridas (base TACO)")
-
-        for _, linha in df_refeicoes.iterrows():
-            nome_ref = linha["refeicao"]
-            kcal_ref = linha["kcal"]
-            prot_ref = linha["proteina_g"]
-            carb_ref = linha["carbo_g"]
-            gord_ref = linha["gordura_g"]
-
-            with st.expander(f"{nome_ref} – ~{kcal_ref} kcal"):
-                st.markdown(
-                    f"""
-**Meta de macros para esta refeição:**  
-• Proteínas: ~{prot_ref} g  
-• Carboidratos: ~{carb_ref} g  
-• Gorduras: ~{gord_ref} g
-""",
-                )
-                st.write("")
-                st.markdown(
-                    receitas.get(
-                        nome_ref,
-                        "Ajuste manualmente esta refeição conforme necessidade."
-                    )
-                )
-
-        st.write("")
-
-        # ======================================
-        # CONTEXTO DO PACIENTE
-        # ======================================
-        st.markdown("#### Contexto do Paciente")
-        tags = [
-            f"Idade: {paciente.idade} anos",
-            f"Sexo: {paciente.sexo.capitalize()}",
-            f"Peso: {paciente.peso:.1f} kg",
-            f"Altura: {paciente.altura:.0f} cm",
-            f"Atividade: {paciente.nivel_atividade}",
-            f"Objetivo: {paciente.objetivo}",
-            f"Gordura corporal: {f'{paciente.gordura_corporal:.1f}%' if paciente.gordura_corporal is not None else 'Não informado'}",
-        ]
-        tags_html = "".join([f'<span class="tag">{t}</span>' for t in tags])
-        st.markdown(tags_html, unsafe_allow_html=True)
-
-        # ======================================
-        # HIDRATAÇÃO
-        # ======================================
-        st.write("")
-        st.markdown("#### 💧 Orientação de Hidratação")
-        agua_min = peso * 30   # ml/kg
-        agua_max = peso * 45   # ml/kg
-        st.markdown(
-            f"""
-• Recomendação geral: **{agua_min/1000:.1f} a {agua_max/1000:.1f} L de água por dia**  
-• Distribuir ao longo do dia, evitando grandes volumes de uma vez.  
-• Aumentar ingestão em dias de treino intenso, muito calor ou sudorese excessiva.
-"""
-        )
-
-        # ======================================
-        # HIGIENE DO SONO
-        # ======================================
-        st.write("")
-        st.markdown("#### 😴 Higiene do Sono")
-        st.markdown(
-            """
-• Priorizar **7–9 horas** de sono por noite.  
-• Manter horário regular para dormir e acordar, inclusive aos finais de semana.  
-• Evitar telas (celular, TV, computador) **30–60 minutos** antes de deitar.  
-• Evitar refeições muito volumosas e cafeína nas 3–4 horas que antecedem o sono.  
-• Ambiente do quarto: escuro, silencioso e com temperatura agradável.  
-• Se houver dificuldade crônica de sono, considerar avaliação médica especializada.
-"""
-        )
-
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.success("Plano gerado com sucesso! 🚀")
