@@ -53,13 +53,13 @@ class NutritionEngine:
 
         # Nome do alimento
         col_nome = next(
-            (c for c in cols if any(s in c for s in ["alimento", "descr", "nome"])),
+            (c for c in cols if any(s in c for s in ["alimento", "descr", "descricao", "descrição", "nome"])),
             cols[0]
         )
 
         # Energia (kcal)
         col_kcal = next(
-            (c for c in cols if "kcal" in c or "energia" in c),
+            (c for c in cols if ("kcal" in c) or ("energia" in c)),
             None
         )
 
@@ -71,21 +71,20 @@ class NutritionEngine:
 
         # Carboidrato
         col_carb = next(
-            (c for c in cols if "carb" in c or "cho" in c),
+            (c for c in cols if ("carb" in c) or ("cho" in c)),
             None
         )
 
         # Gordura / Lipídeos
         col_gord = next(
-            (c for c in cols if "gord" in c or "lipid" in c),
+            (c for c in cols if ("gord" in c) or ("lip" in c)),
             None
         )
 
         if col_kcal is None or col_prot is None or col_carb is None or col_gord is None:
-            # Se não conseguir encontrar, levanta um erro explicando
             raise ValueError(
                 "Não foi possível mapear as colunas de kcal/proteína/carbo/gordura na TACO. "
-                "Verifique o nome das colunas do CSV."
+                f"Colunas encontradas no CSV: {cols}"
             )
 
         return col_nome, col_kcal, col_prot, col_carb, col_gord
@@ -324,7 +323,7 @@ class NutritionEngine:
         )
         return texto
 
-    # ========= RECEITAS SUGERIDAS (AGORA USANDO TACO) =========
+    # ========= RECEITAS SUGERIDAS (USANDO TACO) =========
 
     def sugerir_receitas(self, objetivo: str, refeicoes: List[Dict]) -> Dict[str, str]:
         """
