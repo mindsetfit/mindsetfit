@@ -195,13 +195,25 @@ with col_form:
     }
     equacao_principal = mapa_equacao[equacao_label]
 
-    gordura_corporal = st.number_input(
-        "Percentual de gordura corporal (%) (opcional, para Cunningham)",
+    # ---------- BF REALMENTE OPCIONAL ----------
+    usa_bf = st.checkbox(
+        "Informei meu percentual de gordura com avaliação confiável (bioimpedância, adipômetro, etc.)?",
+        value=True,
+    )
+
+    gordura_corporal_input = st.number_input(
+        "Percentual de gordura corporal (%)",
         min_value=5.0,
         max_value=60.0,
         value=20.0,
         step=0.5,
+        help="Se você não tiver esse dado confiável, desmarque a opção acima.",
     )
+
+    if usa_bf:
+        gordura_corporal = float(gordura_corporal_input)
+    else:
+        gordura_corporal = None
 
     st.markdown(
         '<p class="hint-text">Preencha os dados acima e clique em <b>Gerar Plano Alimentar</b>. As calorias e macronutrientes são calculados a partir das principais equações de TMB e da Tabela TACO.</p>',
@@ -290,21 +302,33 @@ with col_result:
             altura=float(altura),
             nivel_atividade=nivel_atividade,
             objetivo=objetivo,
-            gordura_corporal=float(gordura_corporal),
+            gordura_corporal=gordura_corporal,
         )
 
-        resultado = engine.gerar_plano(paciente, equacao_principal)
+        # Blindagem de erro na geração do plano
+        try:
+            resultado = engine.gerar_plano(paciente, equacao_principal)
+        except Exception as e:
+            st.error(f"Erro ao gerar plano nutricional: {e}")
+            st.markdown(
+                '<p class="hint-text">Verifique se o módulo <b>nutrition_engine.py</b> está atualizado e se a função <code>gerar_plano</code> retorna todas as chaves esperadas.</p>',
+                unsafe_allow_html=True,
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.stop()
+
         macros = resultado["macros"]
 
         # ======================================
         # BLOCO: TMB DESTACADA (TEXTO)
         # ======================================
+        tmb_principal = round(resultado["tmb_principal"])
         st.markdown("### 🔥 Taxa Metabólica Basal (TMB)")
         st.markdown(
             f"""
 Sua TMB estimada pela equação **{equacao_label}** é:
 
-> ### 🧩 **{resultado["tmb_principal"]} kcal/dia**
+> ### 🧩 **{tmb_principal} kcal/dia**
 
 A **Taxa Metabólica Basal (TMB)** representa a quantidade de energia que o corpo precisa em repouso absoluto para manter
 funções vitais como respiração, circulação, temperatura corporal e atividade cerebral.
@@ -319,7 +343,7 @@ funções vitais como respiração, circulação, temperatura corporal e ativida
             [
                 {
                     "Equação selecionada": equacao_label,
-                    "TMB (kcal/dia)": resultado["tmb_principal"],
+                    "TMB (kcal/dia)": tmb_principal,
                 }
             ]
         )
@@ -339,7 +363,7 @@ funções vitais como respiração, circulação, temperatura corporal e ativida
             st.markdown("#### Comparativo da TMB nas principais equações")
             df_tmb = pd.DataFrame(
                 [
-                    {"Equação": k, "TMB (kcal/dia)": v}
+                    {"Equação": k, "TMB (kcal/dia)": round(v)}
                     for k, v in resultado["tmb_equacoes"].items()
                 ]
             )
@@ -398,23 +422,26 @@ a equação que mais faz sentido utilizar é:**
         # ======================================
         # MÉTRICAS PRINCIPAIS (TMB/TDEE/KCAL OBJ)
         # ======================================
+        tdee = round(resultado["tdee"])
+        kcal_obj = round(resultado["kcal_objetivo"])
+
         m1, m2, m3 = st.columns(3)
         with m1:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
             st.markdown('<div class="metric-label">TMB (equação principal)</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{resultado["tmb_principal"]} kcal</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{tmb_principal} kcal</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with m2:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
             st.markdown('<div class="metric-label">TDEE (gasto total)</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{resultado["tdee"]} kcal</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{tdee} kcal</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with m3:
             st.markdown('<div class="metric-box">', unsafe_allow_html=True)
             st.markdown('<div class="metric-label">KCAL OBJETIVO</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">{resultado["kcal_objetivo"]} kcal</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{kcal_obj} kcal</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         st.write("")
@@ -509,7 +536,7 @@ a equação que mais faz sentido utilizar é:**
             f"Altura: {paciente.altura:.0f} cm",
             f"Atividade: {paciente.nivel_atividade}",
             f"Objetivo: {paciente.objetivo}",
-            f"Gordura corporal: {paciente.gordura_corporal:.1f}%",
+            f"Gordura corporal: {f'{paciente.gordura_corporal:.1f}%' if paciente.gordura_corporal is not None else 'Não informado'}",
         ]
         tags_html = "".join([f'<span class="tag">{t}</span>' for t in tags])
         st.markdown(tags_html, unsafe_allow_html=True)
