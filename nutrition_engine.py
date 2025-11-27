@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
 import pandas as pd
-import numpy as np
 
 
 # ====================================================
@@ -32,7 +31,7 @@ class NutritionEngine:
     - Ajusta para objetivo (emagrecimento, manutenção, ganho)
     - Gera macros diários
     - Distribui macros por refeição
-    - Sugere combinações automáticas a partir da Tabela TACO
+    - Sugere combinações automáticas usando energy_kcal_per_100g do CSV
     """
 
     def __init__(self, df_alimentos: pd.DataFrame):
@@ -40,159 +39,56 @@ class NutritionEngine:
         self.df_alimentos = df_alimentos.copy()
         self.df_alimentos.columns = [str(c).strip().lower() for c in self.df_alimentos.columns]
 
-        # Mapeia colunas principais da TACO (nome, kcal, proteína, carbo, gordura)
-        self.col_nome, self.col_kcal, self.col_prot, self.col_carb, self.col_gord = self._mapear_colunas()
+        # Garante colunas principais do seu CSV
+        if "name" not in self.df_alimentos.columns:
+            raise ValueError("CSV precisa ter a coluna 'name'.")
+        if "energy_kcal_per_100g" not in self.df_alimentos.columns:
+            raise ValueError("CSV precisa ter a coluna 'energy_kcal_per_100g'.")
 
-        # Prepara listas de alimentos por macronutriente dominante
+        # Converte kcal para numérico
+        self.df_alimentos["energy_kcal_per_100g"] = pd.to_numeric(
+            self.df_alimentos["energy_kcal_per_100g"], errors="coerce"
+        )
+
+        # Prepara listas de alimentos por grupo (carbo, proteína, gordura)
         self.fontes_proteina, self.fontes_carbo, self.fontes_gordura = self._preparar_listas_alimentos()
 
     # ------------------------------------------------
-    # MAPEAMENTO DE COLUNAS (ROBUSTO)
-    # ------------------------------------------------
-    def _mapear_colunas(self) -> Tuple[str, str, str, str, str]:
-        df = self.df_alimentos
-        cols = list(df.columns)
-
-        # ---------------- Nome do alimento ----------------
-        col_nome = next(
-            (c for c in cols if any(s in c for s in ["alimento", "descr", "descricao", "descrição", "nome"])),
-            None
-        )
-        if col_nome is None:
-            # se não achar nada, pega a primeira coluna
-            col_nome = cols[0]
-
-        # ---------------- Energia (kcal) por nome ----------------
-        col_kcal = next(
-            (c for c in cols if ("kcal" in c) or ("energia" in c)),
-            None
-        )
-
-        # ---------------- Proteína por nome ----------------
-        col_prot = next(
-            (c for c in cols if "prot" in c),
-            None
-        )
-
-        # ---------------- Carboidrato por nome ----------------
-        col_carb = next(
-            (c for c in cols if ("carb" in c) or ("cho" in c)),
-            None
-        )
-
-        # ---------------- Gordura / Lipídeos por nome ----------------
-        col_gord = next(
-            (c for c in cols if ("gord" in c) or ("lip" in c)),
-            None
-        )
-
-        # Se conseguiu tudo pelo nome, ótimo
-        if col_kcal and col_prot and col_carb and col_gord:
-            return col_nome, col_kcal, col_prot, col_carb, col_gord
-
-        # ============================
-        # HEURÍSTICA: TENTAR DEDUZIR
-        # ============================
-        # Pega apenas colunas numéricas
-        numeric_cols = []
-        for c in cols:
-            try:
-                if pd.api.types.is_numeric_dtype(df[c]):
-                    numeric_cols.append(c)
-                else:
-                    # tenta converter
-                    df[c] = pd.to_numeric(df[c], errors="coerce")
-                    if pd.api.types.is_numeric_dtype(df[c]):
-                        numeric_cols.append(c)
-            except Exception:
-                continue
-
-        numeric_cols = list(dict.fromkeys(numeric_cols))  # remove duplicados
-
-        if len(numeric_cols) < 4:
-            # não tem coluna numérica suficiente – cai em modo "dummy"
-            # nesse modo, as combinações automáticas vão cair para o texto genérico
-            col_kcal = col_kcal or numeric_cols[0] if numeric_cols else cols[0]
-            col_prot = col_prot or col_kcal
-            col_carb = col_carb or col_kcal
-            col_gord = col_gord or col_kcal
-            return col_nome, col_kcal, col_prot, col_carb, col_gord
-
-        # Calcula média absoluta de cada coluna numérica
-        means = {}
-        for c in numeric_cols:
-            vals = pd.to_numeric(df[c], errors="coerce")
-            m = float(vals.abs().mean(skipna=True))
-            means[c] = m
-
-        # Energia (kcal) costuma ser o maior valor médio
-        if not col_kcal:
-            col_kcal = max(means, key=means.get)
-
-        # Remove kcal do conjunto
-        restantes = [c for c in numeric_cols if c != col_kcal]
-
-        # Para proteína, carbo, gordura: vamos ordenar por média e atribuir na ordem
-        # (é uma heurística: na TACO, em geral a média de carbo é maior que proteína,
-        # e gordura fica menor em média que carbo, dependendo da base)
-        restantes_ordenados = sorted(restantes, key=lambda c: means[c], reverse=True)
-
-        # Se ainda não tivermos as colunas definidas por nome, pegamos por ordem
-        if not col_carb:
-            col_carb = restantes_ordenados[0]  # maior média → provável carbo
-        if not col_prot:
-            # próxima maior
-            for c in restantes_ordenados[1:]:
-                if c != col_carb:
-                    col_prot = c
-                    break
-        if not col_gord:
-            # próxima
-            for c in restantes_ordenados[1:]:
-                if c not in (col_carb, col_prot):
-                    col_gord = c
-                    break
-
-        # fallback final caso alguma ainda seja None
-        col_prot = col_prot or restantes_ordenados[0]
-        col_carb = col_carb or restantes_ordenados[min(1, len(restantes_ordenados)-1)]
-        col_gord = col_gord or restantes_ordenados[min(2, len(restantes_ordenados)-1)]
-
-        return col_nome, col_kcal, col_prot, col_carb, col_gord
-
-    # ------------------------------------------------
-    # SEPARAÇÃO DE ALIMENTOS POR MACRO DOMINANTE
+    # SEPARAÇÃO DE ALIMENTOS POR GRUPO
     # ------------------------------------------------
     def _preparar_listas_alimentos(self):
         df = self.df_alimentos.copy()
 
-        # Garante que as colunas numéricas estejam em formato float
-        for col in [self.col_kcal, self.col_prot, self.col_carb, self.col_gord]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        # Se tiver group, usamos pra segmentar
+        if "group" in df.columns:
+            grupo = df["group"].astype(str).str.lower()
+        else:
+            grupo = pd.Series(["outro"] * len(df))
 
-        df = df.dropna(subset=[self.col_kcal, self.col_prot, self.col_carb, self.col_gord])
+        # Proteínas: proteina_animal, proteina_vegetal, leguminosa
+        fontes_proteina = df[grupo.isin(["proteina_animal", "proteina_vegetal", "leguminosa"])]
 
-        if df.empty:
-            # se der ruim, retorna dfs vazios – o app cai no texto genérico
-            return df.head(0), df.head(0), df.head(0)
+        # Carboidratos: cereal, tuberculo, fruta, leguminosa
+        fontes_carbo = df[grupo.isin(["cereal", "tuberculo", "fruta", "leguminosa"])]
 
-        fontes_proteina = df[
-            (df[self.col_prot] >= 8) &  # pelo menos 8g de proteína / 100g
-            (df[self.col_prot] > df[self.col_carb]) &
-            (df[self.col_prot] >= df[self.col_gord])
-        ].sort_values(self.col_prot, ascending=False)
+        # Gorduras: alimentos que contêm nuts (nozes, amendoim etc.)
+        if "contains_nuts" in df.columns:
+            fontes_gordura = df[df["contains_nuts"] == True]
+        else:
+            fontes_gordura = df.head(0)  # vazio
 
-        fontes_carbo = df[
-            (df[self.col_carb] >= 8) &  # pelo menos 8g de carbo / 100g
-            (df[self.col_carb] > df[self.col_prot]) &
-            (df[self.col_carb] >= df[self.col_gord])
-        ].sort_values(self.col_carb, ascending=False)
+        # Fallback: se alguma lista estiver vazia, usa o próprio df
+        if fontes_proteina.empty:
+            fontes_proteina = df
+        if fontes_carbo.empty:
+            fontes_carbo = df
+        if fontes_gordura.empty:
+            fontes_gordura = df
 
-        fontes_gordura = df[
-            (df[self.col_gord] >= 5) &  # pelo menos 5g de gordura / 100g
-            (df[self.col_gord] > df[self.col_prot]) &
-            (df[self.col_gord] > df[self.col_carb])
-        ].sort_values(self.col_gord, ascending=False)
+        # Ordena por densidade energética (kcal/100g) decrescente
+        fontes_proteina = fontes_proteina.sort_values("energy_kcal_per_100g", ascending=False)
+        fontes_carbo = fontes_carbo.sort_values("energy_kcal_per_100g", ascending=False)
+        fontes_gordura = fontes_gordura.sort_values("energy_kcal_per_100g", ascending=False)
 
         return fontes_proteina, fontes_carbo, fontes_gordura
 
@@ -312,98 +208,86 @@ class NutritionEngine:
 
     # ========= AJUDANTE PARA UMA COMBINAÇÃO POR REFEIÇÃO =========
 
-    def _combo_para_refeicao(self, alvo_prot: float, alvo_carb: float, alvo_gord: float) -> str:
+    def _combo_para_refeicao(self, alvo_kcal: float, alvo_prot: float, alvo_carb: float, alvo_gord: float) -> str:
         """
         Gera uma sugestão de combinação de 2–3 alimentos da TACO
-        tentando chegar perto dos alvos de proteína, carbo e gordura.
+        tentando chegar perto das kcal da refeição,
+        usando energy_kcal_per_100g.
 
-        Obs.: é uma aproximação simples, pensada para ser didática.
+        Como o CSV não tem proteína/carbo/gordura,
+        as metas de macros são exibidas como alvo teórico.
         """
 
-        # Se não tiver listas prontas, devolve texto genérico
+        # Se não tiver dados, cai para texto genérico
         if self.fontes_proteina.empty or self.fontes_carbo.empty:
             return (
-                "Sugestão: combine uma fonte de proteína magra (ex.: peito de frango, ovo, iogurte), "
-                "uma fonte de carboidrato complexo (ex.: arroz, aveia, batata) e uma fonte de gordura boa "
-                "(ex.: azeite de oliva, castanhas), ajustando a porção para se aproximar dos macros da refeição."
+                "Sugestão: combine uma fonte de proteína magra (ex.: frango peito, ovos, tilápia), "
+                "uma fonte de carboidrato complexo (ex.: arroz, batata, mandioca, aveia) e uma fonte de gordura boa "
+                "(ex.: amendoim, castanhas, sementes), ajustando as porções para se aproximar das calorias da refeição."
             )
 
-        # Escolhe 1 alimento de cada grupo (primeira opção das listas, que são ordenadas pela densidade)
+        # Escolhe 1 alimento de cada grupo (primeiro da lista – mais denso energeticamente)
         prot_row = self.fontes_proteina.iloc[0]
         carb_row = self.fontes_carbo.iloc[0]
         gord_row = self.fontes_gordura.iloc[0] if not self.fontes_gordura.empty else None
 
-        nome_p = prot_row[self.col_nome]
-        p_prot = float(prot_row[self.col_prot])
-        p_carb = float(prot_row[self.col_carb])
-        p_gord = float(prot_row[self.col_gord])
+        def extrair_nome_kcal(row):
+            return row["name"], float(row["energy_kcal_per_100g"])
 
-        nome_c = carb_row[self.col_nome]
-        c_prot = float(carb_row[self.col_prot])
-        c_carb = float(carb_row[self.col_carb])
-        c_gord = float(carb_row[self.col_gord])
+        nome_p, kcal_p_100 = extrair_nome_kcal(prot_row)
+        nome_c, kcal_c_100 = extrair_nome_kcal(carb_row)
 
         if gord_row is not None:
-            nome_g = gord_row[self.col_nome]
-            g_prot = float(gord_row[self.col_prot])
-            g_carb = float(gord_row[self.col_carb])
-            g_gord = float(gord_row[self.col_gord])
+            nome_g, kcal_g_100 = extrair_nome_kcal(gord_row)
         else:
-            nome_g, g_prot, g_carb, g_gord = None, 0.0, 0.0, 0.0
+            nome_g, kcal_g_100 = None, 0.0
 
-        # Calcula gramas aproximadas
-        # Proteína: 70% da proteína da refeição vindo do alimento proteico
-        gr_p = 0
-        if p_prot > 0:
-            gr_p = round((alvo_prot * 0.7) / (p_prot / 100))
+        # Divisão aproximada de kcal por fonte
+        # 60% carbo, 25% proteína, 15% gordura
+        kcal_carbo = alvo_kcal * 0.6
+        kcal_prot = alvo_kcal * 0.25
+        kcal_gord = alvo_kcal * 0.15 if nome_g is not None else 0
 
-        # Carbo: 70% do carbo vindo do alimento de carbo
-        gr_c = 0
-        if c_carb > 0:
-            gr_c = round((alvo_carb * 0.7) / (c_carb / 100))
-
-        # Gordura: 70% da gordura vindo da fonte de gordura
-        gr_g = 0
-        if nome_g is not None and g_gord > 0:
-            gr_g = round((alvo_gord * 0.7) / (g_gord / 100))
-
-        # Limita gramas para evitar números muito bizarros
-        def limitar_gramas(g):
+        def gramas_para_kcal(kcal_alvo: float, kcal_por_100g: float) -> int:
+            if kcal_por_100g <= 0:
+                return 0
+            g = round((kcal_alvo / kcal_por_100g) * 100)
+            # limita em 20–250 g
             if g <= 0:
                 return 0
-            return max(20, min(g, 200))
+            return max(20, min(g, 250))
 
-        gr_p = limitar_gramas(gr_p)
-        gr_c = limitar_gramas(gr_c)
-        gr_g = limitar_gramas(gr_g)
+        gr_c = gramas_para_kcal(kcal_carbo, kcal_c_100)
+        gr_p = gramas_para_kcal(kcal_prot, kcal_p_100)
+        gr_g = gramas_para_kcal(kcal_gord, kcal_g_100) if nome_g is not None else 0
 
         linhas = []
-
         if gr_p > 0:
-            linhas.append(f"• **{gr_p} g** de **{nome_p}** (principal fonte de proteína)")
+            linhas.append(f"• **{gr_p} g** de **{nome_p}** (fonte principal de proteína)")
         if gr_c > 0:
-            linhas.append(f"• **{gr_c} g** de **{nome_c}** (principal fonte de carboidrato)")
+            linhas.append(f"• **{gr_c} g** de **{nome_c}** (fonte principal de carboidrato)")
         if nome_g is not None and gr_g > 0:
-            linhas.append(f"• **{gr_g} g** de **{nome_g}** (fonte de gordura boa)")
+            linhas.append(f"• **{gr_g} g** de **{nome_g}** (fonte de gordura/oleaginosas)")
 
         if not linhas:
             return (
                 "Sugestão: ajuste manualmente as fontes de proteína, carboidrato e gordura "
-                "para se aproximar dos macros indicados nesta refeição."
+                "para se aproximar das calorias indicadas nesta refeição."
             )
 
         texto = "\n".join(linhas)
         texto += (
-            "\n\n> Ajuste fino das porções pode ser feito conforme preferência, tolerância e resposta clínica."
+            "\n\n> As metas de proteína, carboidratos e gorduras para esta refeição são aproximadas. "
+            "Ajustes finos podem ser feitos conforme preferência e resposta clínica."
         )
         return texto
 
-    # ========= RECEITAS SUGERIDAS (USANDO TACO) =========
+    # ========= RECEITAS SUGERIDAS (USANDO SEU CSV) =========
 
     def sugerir_receitas(self, objetivo: str, refeicoes: List[Dict]) -> Dict[str, str]:
         """
         Gera sugestões de combinações de alimentos para cada refeição,
-        usando a Tabela TACO como base e os alvos de macros da refeição.
+        usando a Tabela simplificada (energy_kcal_per_100g + grupos).
         """
         objetivo = objetivo.lower()
 
@@ -418,23 +302,25 @@ class NutritionEngine:
 
         for ref in refeicoes:
             nome_ref = ref["refeicao"]
+            refe_kcal = ref["kcal"]
             prot_ref = ref["proteina_g"]
             carb_ref = ref["carbo_g"]
             gord_ref = ref["gordura_g"]
 
             combo_txt = self._combo_para_refeicao(
+                alvo_kcal=refe_kcal,
                 alvo_prot=prot_ref,
                 alvo_carb=carb_ref,
                 alvo_gord=gord_ref,
             )
 
             texto = f"""
-**Meta de macros para esta refeição:**  
+**Meta de macros para esta refeição (alvo teórico):**  
 • Proteínas: ~{prot_ref} g  
 • Carboidratos: ~{carb_ref} g  
 • Gorduras: ~{gord_ref} g  
 
-**Sugestão automática (base TACO) – foco em {foco}**
+**Sugestão automática (base na Tabela de alimentos) – foco em {foco}**
 
 {combo_txt}
 """
@@ -460,7 +346,7 @@ class NutritionEngine:
         # Distribuição por refeição
         refeicoes = self.distribuir_por_refeicao(macros)
 
-        # Receitas sugeridas (agora usando TACO + macros por refeição)
+        # Receitas sugeridas (usando CSV)
         receitas = self.sugerir_receitas(paciente.objetivo, refeicoes)
 
         return {
@@ -480,11 +366,8 @@ class NutritionEngine:
 
 def carregar_banco_de_dados_de_alimentos(caminho_csv: str = "taco_sample.csv") -> pd.DataFrame:
     """
-    Lê um arquivo CSV com os alimentos (baseado na Tabela TACO).
-    Tenta primeiro utf-8, depois latin-1. Ajuste o separador se necessário.
+    Lê um arquivo CSV com os alimentos.
+    No seu exemplo, o separador é vírgula.
     """
-    try:
-        df = pd.read_csv(caminho_csv, sep=";", encoding="utf-8")
-    except UnicodeDecodeError:
-        df = pd.read_csv(caminho_csv, sep=";", encoding="latin-1")
+    df = pd.read_csv(caminho_csv, sep=",", encoding="utf-8")
     return df
