@@ -1,7 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 import pandas as pd
 
+
+# ====================================================
+# DATACLASS – INFORMAÇÕES DO PACIENTE
+# ====================================================
 
 @dataclass
 class Informações_do_Paciente:
@@ -15,6 +19,10 @@ class Informações_do_Paciente:
     gordura_corporal: Optional[float] = None  # % (opcional)
 
 
+# ====================================================
+# NUTRITION ENGINE
+# ====================================================
+
 class NutritionEngine:
     """
     Motor nutricional:
@@ -23,12 +31,96 @@ class NutritionEngine:
     - Ajusta para objetivo (emagrecimento, manutenção, ganho)
     - Gera macros diários
     - Distribui macros por refeição
-    - Sugere receitas baseadas em alimentos presentes na TACO
+    - Sugere combinações automáticas a partir da Tabela TACO
     """
 
     def __init__(self, df_alimentos: pd.DataFrame):
-        self.df_alimentos = df_alimentos
-        self.df_alimentos.columns = [c.strip().lower() for c in df_alimentos.columns]
+        # Normaliza colunas
+        self.df_alimentos = df_alimentos.copy()
+        self.df_alimentos.columns = [c.strip().lower() for c in self.df_alimentos.columns]
+
+        # Mapeia colunas principais da TACO (nome, kcal, proteína, carbo, gordura)
+        self.col_nome, self.col_kcal, self.col_prot, self.col_carb, self.col_gord = self._mapear_colunas()
+
+        # Prepara listas de alimentos por macronutriente dominante
+        self.fontes_proteina, self.fontes_carbo, self.fontes_gordura = self._preparar_listas_alimentos()
+
+    # ------------------------------------------------
+    # MAPEAMENTO DE COLUNAS
+    # ------------------------------------------------
+    def _mapear_colunas(self) -> Tuple[str, str, str, str, str]:
+        cols = list(self.df_alimentos.columns)
+
+        # Nome do alimento
+        col_nome = next(
+            (c for c in cols if any(s in c for s in ["alimento", "descr", "nome"])),
+            cols[0]
+        )
+
+        # Energia (kcal)
+        col_kcal = next(
+            (c for c in cols if "kcal" in c or "energia" in c),
+            None
+        )
+
+        # Proteína
+        col_prot = next(
+            (c for c in cols if "prot" in c),
+            None
+        )
+
+        # Carboidrato
+        col_carb = next(
+            (c for c in cols if "carb" in c or "cho" in c),
+            None
+        )
+
+        # Gordura / Lipídeos
+        col_gord = next(
+            (c for c in cols if "gord" in c or "lipid" in c),
+            None
+        )
+
+        if col_kcal is None or col_prot is None or col_carb is None or col_gord is None:
+            # Se não conseguir encontrar, levanta um erro explicando
+            raise ValueError(
+                "Não foi possível mapear as colunas de kcal/proteína/carbo/gordura na TACO. "
+                "Verifique o nome das colunas do CSV."
+            )
+
+        return col_nome, col_kcal, col_prot, col_carb, col_gord
+
+    # ------------------------------------------------
+    # SEPARAÇÃO DE ALIMENTOS POR MACRO DOMINANTE
+    # ------------------------------------------------
+    def _preparar_listas_alimentos(self):
+        df = self.df_alimentos.copy()
+
+        # Garante que as colunas numéricas estejam em formato float
+        for col in [self.col_kcal, self.col_prot, self.col_carb, self.col_gord]:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        df = df.dropna(subset=[self.col_kcal, self.col_prot, self.col_carb, self.col_gord])
+
+        fontes_proteina = df[
+            (df[self.col_prot] >= 8) &  # pelo menos 8g de proteína / 100g
+            (df[self.col_prot] > df[self.col_carb]) &
+            (df[self.col_prot] >= df[self.col_gord])
+        ].sort_values(self.col_prot, ascending=False)
+
+        fontes_carbo = df[
+            (df[self.col_carb] >= 8) &  # pelo menos 8g de carbo / 100g
+            (df[self.col_carb] > df[self.col_prot]) &
+            (df[self.col_carb] >= df[self.col_gord])
+        ].sort_values(self.col_carb, ascending=False)
+
+        fontes_gordura = df[
+            (df[self.col_gord] >= 5) &  # pelo menos 5g de gordura / 100g
+            (df[self.col_gord] > df[self.col_prot]) &
+            (df[self.col_gord] > df[self.col_carb])
+        ].sort_values(self.col_gord, ascending=False)
+
+        return fontes_proteina, fontes_carbo, fontes_gordura
 
     # ========= EQUAÇÕES DE TMB =========
 
@@ -144,13 +236,100 @@ class NutritionEngine:
             )
         return refeicoes
 
-    # ========= RECEITAS SUGERIDAS (base TACO) =========
+    # ========= AJUDANTE PARA UMA COMBINAÇÃO POR REFEIÇÃO =========
 
-    def sugerir_receitas(self, objetivo: str) -> Dict[str, str]:
+    def _combo_para_refeicao(self, alvo_prot: float, alvo_carb: float, alvo_gord: float) -> str:
         """
-        Sugestões didáticas. Todos os alimentos existem na Tabela TACO
-        (ex.: ovo de galinha, pão integral, banana, arroz branco cozido,
-        feijão carioca, peito de frango, azeite de oliva, etc.).
+        Gera uma sugestão de combinação de 2–3 alimentos da TACO
+        tentando chegar perto dos alvos de proteína, carbo e gordura.
+
+        Obs.: é uma aproximação simples, pensada para ser didática.
+        """
+
+        # Se não tiver listas prontas, devolve texto genérico
+        if self.fontes_proteina.empty or self.fontes_carbo.empty:
+            return (
+                "Sugestão: combine uma fonte de proteína magra (ex.: peito de frango, ovo, iogurte), "
+                "uma fonte de carboidrato complexo (ex.: arroz, aveia, batata) e uma fonte de gordura boa "
+                "(ex.: azeite de oliva, castanhas), ajustando a porção para se aproximar dos macros da refeição."
+            )
+
+        # Escolhe 1 alimento de cada grupo (primeira opção das listas, que são ordenadas pela densidade)
+        prot_row = self.fontes_proteina.iloc[0]
+        carb_row = self.fontes_carbo.iloc[0]
+        gord_row = self.fontes_gordura.iloc[0] if not self.fontes_gordura.empty else None
+
+        nome_p = prot_row[self.col_nome]
+        p_prot = float(prot_row[self.col_prot])
+        p_carb = float(prot_row[self.col_carb])
+        p_gord = float(prot_row[self.col_gord])
+
+        nome_c = carb_row[self.col_nome]
+        c_prot = float(carb_row[self.col_prot])
+        c_carb = float(carb_row[self.col_carb])
+        c_gord = float(carb_row[self.col_gord])
+
+        if gord_row is not None:
+            nome_g = gord_row[self.col_nome]
+            g_prot = float(gord_row[self.col_prot])
+            g_carb = float(gord_row[self.col_carb])
+            g_gord = float(gord_row[self.col_gord])
+        else:
+            nome_g, g_prot, g_carb, g_gord = None, 0.0, 0.0, 0.0
+
+        # Calcula gramas aproximadas
+        # Proteína: 70% da proteína da refeição vindo do alimento proteico
+        gr_p = 0
+        if p_prot > 0:
+            gr_p = round((alvo_prot * 0.7) / (p_prot / 100))
+
+        # Carbo: 70% do carbo vindo do alimento de carbo
+        gr_c = 0
+        if c_carb > 0:
+            gr_c = round((alvo_carb * 0.7) / (c_carb / 100))
+
+        # Gordura: 70% da gordura vindo da fonte de gordura
+        gr_g = 0
+        if nome_g is not None and g_gord > 0:
+            gr_g = round((alvo_gord * 0.7) / (g_gord / 100))
+
+        # Limita gramas para evitar números muito bizarros
+        def limitar_gramas(g):
+            if g <= 0:
+                return 0
+            return max(20, min(g, 200))
+
+        gr_p = limitar_gramas(gr_p)
+        gr_c = limitar_gramas(gr_c)
+        gr_g = limitar_gramas(gr_g)
+
+        linhas = []
+
+        if gr_p > 0:
+            linhas.append(f"• **{gr_p} g** de **{nome_p}** (principal fonte de proteína)")
+        if gr_c > 0:
+            linhas.append(f"• **{gr_c} g** de **{nome_c}** (principal fonte de carboidrato)")
+        if nome_g is not None and gr_g > 0:
+            linhas.append(f"• **{gr_g} g** de **{nome_g}** (fonte de gordura boa)")
+
+        if not linhas:
+            return (
+                "Sugestão: ajuste manualmente as fontes de proteína, carboidrato e gordura "
+                "para se aproximar dos macros indicados nesta refeição."
+            )
+
+        texto = "\n".join(linhas)
+        texto += (
+            "\n\n> Ajuste fino das porções pode ser feito conforme preferência, tolerância e resposta clínica."
+        )
+        return texto
+
+    # ========= RECEITAS SUGERIDAS (AGORA USANDO TACO) =========
+
+    def sugerir_receitas(self, objetivo: str, refeicoes: List[Dict]) -> Dict[str, str]:
+        """
+        Gera sugestões de combinações de alimentos para cada refeição,
+        usando a Tabela TACO como base e os alvos de macros da refeição.
         """
         objetivo = objetivo.lower()
 
@@ -161,67 +340,33 @@ class NutritionEngine:
         else:
             foco = "equilíbrio entre proteínas, carboidratos complexos e gorduras boas."
 
-        receitas = {
-            "Café da manhã": f"""
-• Omelete de 2 ovos inteiros + clara extra com espinafre refogado (ovo de galinha, espinafre – TACO)  
-• 1 fatia de pão integral (pão de forma integral – TACO)  
-• 1 porção de fruta (banana-prata ou maçã – TACO)  
+        sugestoes = {}
 
-Modo de preparo:
-1. Bater os ovos, adicionar o espinafre picado e temperos naturais (sal, pimenta, cheiro-verde).  
-2. Grelhar em frigideira antiaderente com mínimo de óleo.  
-3. Servir com o pão integral levemente aquecido e a fruta in natura.
-Foco: {foco}
-""",
-            "Lanche da manhã": """
-• Iogurte natural desnatado (TACO)  
-• 1 colher de sopa de aveia em flocos (TACO)  
-• 1 porção pequena de fruta (mamão papaya ou morango – TACO)  
+        for ref in refeicoes:
+            nome_ref = ref["refeicao"]
+            prot_ref = ref["proteina_g"]
+            carb_ref = ref["carbo_g"]
+            gord_ref = ref["gordura_g"]
 
-Modo de preparo:
-1. Misturar o iogurte com a aveia.  
-2. Servir com a fruta picada por cima.
-""",
-            "Almoço": """
-• Arroz branco ou integral cozido (arroz branco/ integral cozido – TACO)  
-• Feijão carioca cozido (TACO)  
-• Peito de frango grelhado (TACO) ou carne magra  
-• Salada crua variada (alface, tomate, cenoura ralada – TACO)  
-• 1 fio de azeite de oliva extra virgem (TACO)  
+            combo_txt = self._combo_para_refeicao(
+                alvo_prot=prot_ref,
+                alvo_carb=carb_ref,
+                alvo_gord=gord_ref,
+            )
 
-Modo de preparo:
-1. Cozinhar o arroz e o feijão conforme o hábito, com pouco óleo.  
-2. Grelhar o peito de frango em frigideira antiaderente com temperos naturais.  
-3. Montar o prato com metade do espaço para salada, 1/4 para arroz + feijão e 1/4 para a proteína.
-""",
-            "Lanche da tarde": """
-• Castanhas (castanha de caju ou do Pará – TACO)  
-• 1 fruta (pera, maçã ou tangerina – TACO)  
+            texto = f"""
+**Meta de macros para esta refeição:**  
+• Proteínas: ~{prot_ref} g  
+• Carboidratos: ~{carb_ref} g  
+• Gorduras: ~{gord_ref} g  
 
-Modo de preparo:
-1. Consumir as castanhas in natura.  
-2. Comer a fruta inteira, de preferência com casca quando possível.
-""",
-            "Jantar": """
-• Omelete de claras com legumes (clara de ovo, abobrinha, cebola, pimentão – TACO)  
-• Salada verde variada  
-• Fonte leve de carboidrato se necessário (mandioca cozida, batata-doce – TACO)  
+**Sugestão automática (base TACO) – foco em {foco}**
 
-Modo de preparo:
-1. Refogar os legumes com mínimo de óleo.  
-2. Adicionar as claras batidas e cozinhar em fogo baixo.  
-3. Servir com salada e, se houver treino à noite, adicionar uma porção pequena de carboidrato.
-""",
-            "Ceia": """
-• Leite desnatado ou bebida vegetal sem açúcar (TACO)  
-• 1 porção pequena de oleaginosas OU 1 colher de sopa de pasta de amendoim 100% (TACO)  
+{combo_txt}
+"""
+            sugestoes[nome_ref] = texto
 
-Modo de preparo:
-1. Aquecer levemente a bebida, se desejar.  
-2. Consumir junto com as oleaginosas ou pasta de amendoim.
-""",
-        }
-        return receitas
+        return sugestoes
 
     # ========= PLANO COMPLETO =========
 
@@ -241,8 +386,8 @@ Modo de preparo:
         # Distribuição por refeição
         refeicoes = self.distribuir_por_refeicao(macros)
 
-        # Receitas sugeridas
-        receitas = self.sugerir_receitas(paciente.objetivo)
+        # Receitas sugeridas (agora usando TACO + macros por refeição)
+        receitas = self.sugerir_receitas(paciente.objetivo, refeicoes)
 
         return {
             "tmb_principal": round(tmb_principal),
@@ -253,12 +398,19 @@ Modo de preparo:
             "refeicoes": refeicoes,
             "receitas": receitas,
         }
-        
+
+
+# ====================================================
+# FUNÇÃO AUXILIAR – CARREGAR BANCO TACO
+# ====================================================
 
 def carregar_banco_de_dados_de_alimentos(caminho_csv: str = "taco_sample.csv") -> pd.DataFrame:
     """
     Lê um arquivo CSV com os alimentos (baseado na Tabela TACO).
-    Ajuste o separador ou nome do arquivo, se necessário.
+    Tenta primeiro utf-8, depois latin-1. Ajuste o separador se necessário.
     """
-    df = pd.read_csv(caminho_csv, sep=";")
+    try:
+        df = pd.read_csv(caminho_csv, sep=";", encoding="utf-8")
+    except UnicodeDecodeError:
+        df = pd.read_csv(caminho_csv, sep=";", encoding="latin-1")
     return df
