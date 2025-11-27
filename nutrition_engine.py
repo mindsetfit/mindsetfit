@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Tuple
 import pandas as pd
+import numpy as np
 
 
 # ====================================================
@@ -37,7 +38,7 @@ class NutritionEngine:
     def __init__(self, df_alimentos: pd.DataFrame):
         # Normaliza colunas
         self.df_alimentos = df_alimentos.copy()
-        self.df_alimentos.columns = [c.strip().lower() for c in self.df_alimentos.columns]
+        self.df_alimentos.columns = [str(c).strip().lower() for c in self.df_alimentos.columns]
 
         # Mapeia colunas principais da TACO (nome, kcal, proteína, carbo, gordura)
         self.col_nome, self.col_kcal, self.col_prot, self.col_carb, self.col_gord = self._mapear_colunas()
@@ -46,46 +47,116 @@ class NutritionEngine:
         self.fontes_proteina, self.fontes_carbo, self.fontes_gordura = self._preparar_listas_alimentos()
 
     # ------------------------------------------------
-    # MAPEAMENTO DE COLUNAS
+    # MAPEAMENTO DE COLUNAS (ROBUSTO)
     # ------------------------------------------------
     def _mapear_colunas(self) -> Tuple[str, str, str, str, str]:
-        cols = list(self.df_alimentos.columns)
+        df = self.df_alimentos
+        cols = list(df.columns)
 
-        # Nome do alimento
+        # ---------------- Nome do alimento ----------------
         col_nome = next(
             (c for c in cols if any(s in c for s in ["alimento", "descr", "descricao", "descrição", "nome"])),
-            cols[0]
+            None
         )
+        if col_nome is None:
+            # se não achar nada, pega a primeira coluna
+            col_nome = cols[0]
 
-        # Energia (kcal)
+        # ---------------- Energia (kcal) por nome ----------------
         col_kcal = next(
             (c for c in cols if ("kcal" in c) or ("energia" in c)),
             None
         )
 
-        # Proteína
+        # ---------------- Proteína por nome ----------------
         col_prot = next(
             (c for c in cols if "prot" in c),
             None
         )
 
-        # Carboidrato
+        # ---------------- Carboidrato por nome ----------------
         col_carb = next(
             (c for c in cols if ("carb" in c) or ("cho" in c)),
             None
         )
 
-        # Gordura / Lipídeos
+        # ---------------- Gordura / Lipídeos por nome ----------------
         col_gord = next(
             (c for c in cols if ("gord" in c) or ("lip" in c)),
             None
         )
 
-        if col_kcal is None or col_prot is None or col_carb is None or col_gord is None:
-            raise ValueError(
-                "Não foi possível mapear as colunas de kcal/proteína/carbo/gordura na TACO. "
-                f"Colunas encontradas no CSV: {cols}"
-            )
+        # Se conseguiu tudo pelo nome, ótimo
+        if col_kcal and col_prot and col_carb and col_gord:
+            return col_nome, col_kcal, col_prot, col_carb, col_gord
+
+        # ============================
+        # HEURÍSTICA: TENTAR DEDUZIR
+        # ============================
+        # Pega apenas colunas numéricas
+        numeric_cols = []
+        for c in cols:
+            try:
+                if pd.api.types.is_numeric_dtype(df[c]):
+                    numeric_cols.append(c)
+                else:
+                    # tenta converter
+                    df[c] = pd.to_numeric(df[c], errors="coerce")
+                    if pd.api.types.is_numeric_dtype(df[c]):
+                        numeric_cols.append(c)
+            except Exception:
+                continue
+
+        numeric_cols = list(dict.fromkeys(numeric_cols))  # remove duplicados
+
+        if len(numeric_cols) < 4:
+            # não tem coluna numérica suficiente – cai em modo "dummy"
+            # nesse modo, as combinações automáticas vão cair para o texto genérico
+            col_kcal = col_kcal or numeric_cols[0] if numeric_cols else cols[0]
+            col_prot = col_prot or col_kcal
+            col_carb = col_carb or col_kcal
+            col_gord = col_gord or col_kcal
+            return col_nome, col_kcal, col_prot, col_carb, col_gord
+
+        # Calcula média absoluta de cada coluna numérica
+        means = {}
+        for c in numeric_cols:
+            vals = pd.to_numeric(df[c], errors="coerce")
+            m = float(vals.abs().mean(skipna=True))
+            means[c] = m
+
+        # Energia (kcal) costuma ser o maior valor médio
+        if not col_kcal:
+            col_kcal = max(means, key=means.get)
+
+        # Remove kcal do conjunto
+        restantes = [c for c in numeric_cols if c != col_kcal]
+
+        # Para proteína, carbo, gordura: vamos ordenar por média e atribuir na ordem
+        # (é uma heurística: na TACO, em geral a média de carbo é maior que proteína,
+        # e gordura fica menor em média que carbo, dependendo da base)
+        restantes_ordenados = sorted(restantes, key=lambda c: means[c], reverse=True)
+
+        # Se ainda não tivermos as colunas definidas por nome, pegamos por ordem
+        if not col_carb:
+            col_carb = restantes_ordenados[0]  # maior média → provável carbo
+        if not col_prot:
+            # próxima maior
+            for c in restantes_ordenados[1:]:
+                if c != col_carb:
+                    col_prot = c
+                    break
+        if not col_gord:
+            # próxima
+            for c in restantes_ordenados[1:]:
+                if c not in (col_carb, col_prot):
+                    col_gord = c
+                    break
+
+        # fallback final caso alguma ainda seja None
+        col_prot = col_prot or restantes_ordenados[0]
+        col_carb = col_carb or restantes_ordenados[min(1, len(restantes_ordenados)-1)]
+        col_gord = col_gord or restantes_ordenados[min(2, len(restantes_ordenados)-1)]
 
         return col_nome, col_kcal, col_prot, col_carb, col_gord
 
@@ -100,6 +171,10 @@ class NutritionEngine:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
         df = df.dropna(subset=[self.col_kcal, self.col_prot, self.col_carb, self.col_gord])
+
+        if df.empty:
+            # se der ruim, retorna dfs vazios – o app cai no texto genérico
+            return df.head(0), df.head(0), df.head(0)
 
         fontes_proteina = df[
             (df[self.col_prot] >= 8) &  # pelo menos 8g de proteína / 100g
